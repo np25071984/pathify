@@ -28,9 +28,24 @@ pub enum Command {
     Convert(ConvertArgs),
 
     /// Combine several traces into one.
+    ///
+    /// Inputs that overlap in time are reconciled: points recording the same
+    /// moment on different devices are matched and collapsed, so the merged
+    /// trace does not report double the distance.
+    ///
+    /// Inputs that do not overlap are simply ordered and stitched together,
+    /// keeping their own segment boundaries.
     Merge(MergeArgs),
 
     /// Remove bad fixes, and locations you do not want to share.
+    ///
+    /// Drift filtering runs by default: it only ever discards fixes that imply
+    /// an impossible speed, which are readings the receiver got wrong.
+    ///
+    /// Redaction never runs unless you ask for it, because it deletes real
+    /// places you went. Use --trim-ends to hide where a journey started and
+    /// finished without naming the address, or --redact-around to fence a
+    /// location you can name.
     Clean(CleanArgs),
 }
 
@@ -94,12 +109,6 @@ impl ConvertArgs {
 }
 
 #[derive(Debug, Args)]
-#[command(long_about = "Combine several traces into one.\n\n\
-                  Inputs that overlap in time are reconciled: points recording the same \
-                  moment on different devices are matched and collapsed, so the merged \
-                  trace does not report double the distance. Inputs that do not overlap \
-                  are simply ordered and stitched together, keeping their own segment \
-                  boundaries.")]
 pub struct MergeArgs {
     /// Input files, or `-` for stdin. At least two to be worth merging.
     #[arg(required = true, value_name = "FILE", num_args = 1..)]
@@ -163,15 +172,6 @@ impl MergeArgs {
 }
 
 #[derive(Debug, Args)]
-#[command(
-    long_about = "Remove bad fixes, and locations you do not want to share.\n\n\
-                  Drift filtering runs by default: it only ever discards fixes that imply \
-                  an impossible speed, which are readings the receiver got wrong.\n\n\
-                  Redaction never runs unless you ask for it, because it deletes real \
-                  places you went. Use --trim-ends to hide where a journey started and \
-                  finished without naming the address, or --redact-around to fence a \
-                  location you can name."
-)]
 pub struct CleanArgs {
     /// Input file, or `-` for stdin.
     #[arg(default_value = "-", value_name = "FILE")]

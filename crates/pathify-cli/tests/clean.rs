@@ -214,3 +214,19 @@ fn cleaning_composes_in_a_pipeline() {
         .success()
         .stdout(predicate::str::contains("FeatureCollection"));
 }
+
+/// As with `merge`, the long help only reaches the user from a doc comment on
+/// the variant. This one matters more: it is where the opt-in nature of
+/// redaction is explained.
+#[test]
+fn the_long_help_explains_the_two_kinds_of_removal() {
+    pathify()
+        .args(["clean", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Drift filtering runs by default"))
+        .stdout(predicate::str::contains(
+            "Redaction never runs unless you ask",
+        ))
+        .stdout(predicate::str::contains("--trim-ends"));
+}
