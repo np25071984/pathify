@@ -1,0 +1,14 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+description = "A local-first CLI and TUI for GPS trace data."
+
+[workspace.dependencies]
+pathify-core = { path = "crates/pathify-core" }
+pathify-tui = { path = "crates/pathify-tui" }

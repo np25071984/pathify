@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A second device recording the same ride as ride.gpx: timestamps two seconds
+  later, coordinates about six meters off (roughly what two consumer GPS
+  receivers disagree by), and two extra points at the end where the watch kept
+  recording after the phone stopped.
+-->
+<gpx version="1.1" creator="pathify-test-watch" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>Burke-Gilman morning (watch)</name>
+  </metadata>
+  <trk>
+    <name>Watch</name>
+    <trkseg>
+      <trkpt lat="47.653540" lon="-122.305550"><ele>11.5</ele><time>2024-05-01T15:00:02Z</time></trkpt>
+      <trkpt lat="47.654245" lon="-122.303055"><ele>13.0</ele><time>2024-05-01T15:00:32Z</time></trkpt>
+      <trkpt lat="47.655038" lon="-122.300345"><ele>18.5</ele><time>2024-05-01T15:01:02Z</time></trkpt>
+      <trkpt lat="47.656142" lon="-122.297152"><ele>24.0</ele><time>2024-05-01T15:01:32Z</time></trkpt>
+      <trkpt lat="47.657444" lon="-122.293950"><ele>31.5</ele><time>2024-05-01T15:02:02Z</time></trkpt>
+      <trkpt lat="47.658836" lon="-122.290648"><ele>29.0</ele><time>2024-05-01T15:02:32Z</time></trkpt>
+    </trkseg>
+    <trkseg>
+      <trkpt lat="47.661243" lon="-122.284050"><ele>27.5</ele><time>2024-05-01T15:05:02Z</time></trkpt>
+      <trkpt lat="47.662538" lon="-122.280947"><ele>21.0</ele><time>2024-05-01T15:05:32Z</time></trkpt>
+      <trkpt lat="47.663945" lon="-122.277750"><ele>16.5</ele><time>2024-05-01T15:06:02Z</time></trkpt>
+      <trkpt lat="47.665139" lon="-122.274452"><ele>14.0</ele><time>2024-05-01T15:06:32Z</time></trkpt>
+      <trkpt lat="47.666300" lon="-122.271200"><ele>13.0</ele><time>2024-05-01T15:07:02Z</time></trkpt>
+      <trkpt lat="47.667500" lon="-122.268000"><ele>12.5</ele><time>2024-05-01T15:07:32Z</time></trkpt>
+    </trkseg>
+  </trk>
+</gpx>
