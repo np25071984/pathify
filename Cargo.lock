@@ -1080,6 +1080,7 @@ dependencies = [
  "chrono",
  "clap",
  "pathify-core",
+ "pathify-tui",
  "predicates",
  "serde_json",
 ]

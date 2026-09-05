@@ -4,8 +4,8 @@ A local-first command-line toolkit for GPS trace data — inspect, clean, merge,
 convert, and view GPX, FIT, KML, GeoJSON, and CSV traces without a desktop GIS
 application and without uploading anything anywhere.
 
-> **Status: early.** `info`, `convert`, `merge`, and `clean` work across GPX,
-> GeoJSON, and CSV today. The remaining commands and format adapters are in progress — see
+> **Status: early.** `info`, `convert`, `merge`, `clean`, and `view` work
+> across GPX, GeoJSON, and CSV today. The remaining commands and format adapters are in progress — see
 > [Roadmap](#roadmap).
 
 ## Format support
@@ -220,6 +220,50 @@ Redaction **splits** the segment it cuts instead of closing the gap. Joining the
 survivors would draw a straight line through the hidden area — inventing travel
 that never happened, and leaving a chord pointing at exactly what was hidden.
 
+### `pathify view`
+
+```sh
+pathify view ride.gpx
+cat ride.gpx | pathify view      # piping the trace in is fine
+```
+
+| Key | Action |
+| --- | --- |
+| `h` `j` `k` `l` or arrows | Pan |
+| `+` `=` `i` / `-` `_` `o` | Zoom in / out |
+| `f` `r` | Fit the whole trace |
+| `?` | Show or hide the key list |
+| `q` `Esc` `Ctrl-C` | Quit |
+
+```text
+┌ ride.gpx ────────────────────────────────────────────────────────────────────┐
+│                                                  ⢀                           │
+│                                                ⢠⠊⠁                           │
+│                                              ⡠⠒⠁                             │
+│                                            ⡠⠊                                │
+│                                                                              │
+│                                   ⡔                                          │
+│                                 ⡠⠊                                           │
+│                            ⢀⠔⠊                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+14 pts  ·  3.80 km     hjkl pan · +/- zoom · f fit · ? help · q quit
+```
+
+This is the one command that does not compose in a pipeline: it paints a screen
+rather than emitting a document, so it needs a terminal and refuses a redirected
+stdout with an explanation rather than failing somewhere deep inside a terminal
+library. Piping the *trace* in still works — key presses are read from the
+controlling terminal, not from stdin.
+
+There are no map tiles and never will be: fetching them would mean network
+access. What you get is the trace itself, drawn with braille dots at four times
+the vertical resolution of the character grid, projected so a degree of
+longitude is drawn shorter than a degree of latitude — without that correction
+every route comes out stretched sideways.
+
+Segments are drawn separately here too, so a pause or a dropout shows as a break
+in the line rather than a stroke across ground nobody covered.
+
 #### CSV schema
 
 Writing emits a stable header:
@@ -263,8 +307,8 @@ jump across one as climb.
 - [x] `convert`, with the GeoJSON and CSV adapters
 - [x] `merge` — overlap-aware concatenation and reconciliation
 - [x] `clean` — drift filtering and location redaction
+- [x] `view` — interactive braille terminal map
 - [ ] KML adapter
-- [ ] `view` — interactive braille-canvas terminal map
 - [ ] FIT adapter
 - [ ] Distribution via Homebrew and crates.io
 
