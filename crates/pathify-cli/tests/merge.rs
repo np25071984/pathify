@@ -181,3 +181,18 @@ fn merged_output_pipes_into_other_commands() {
         .success()
         .stdout(predicate::str::contains("format      geojson"));
 }
+
+/// The long help is written as a doc comment on the subcommand variant, which
+/// is the only place clap reads it from. Written as `long_about` on the args
+/// struct instead — as it originally was — it is silently ignored, and the
+/// explanation never reaches anyone.
+#[test]
+fn the_long_help_explains_what_merging_actually_does() {
+    pathify()
+        .args(["merge", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("overlap in time are reconciled"))
+        .stdout(predicate::str::contains("double the distance"))
+        .stdout(predicate::str::contains("ordered and stitched together"));
+}
