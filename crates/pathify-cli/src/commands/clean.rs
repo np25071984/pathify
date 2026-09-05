@@ -10,7 +10,7 @@ use crate::cli::CleanArgs;
 use crate::io::read_input;
 
 pub fn run(args: &CleanArgs, out: &mut dyn Write) -> Result<()> {
-    let (bytes, path) = read_input(&args.input)?;
+    let (bytes, path) = read_input(args.input.as_deref())?;
     let source = formats::detect(args.from, path.as_deref(), &bytes)?;
     let trace = formats::read(source, &bytes)?;
 

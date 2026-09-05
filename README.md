@@ -58,13 +58,18 @@ Burke-Gilman morning
   bounds      47.6535, -122.3056 → 47.6651, -122.2745
 ```
 
-Every command reads a file or `-` for stdin, writes results to stdout, and sends
+Every command reads a file or piped input, writes results to stdout, and sends
 diagnostics to stderr, so they compose:
 
 ```sh
 cat ride.gpx | pathify info                    # format detected by sniffing content
 pathify info ride.gpx --json | jq .distance_m  # machine-readable output
 ```
+
+Omit the filename and Pathify reads whatever is piped in. Omit it with nothing
+piped in and it says so rather than sitting there waiting on a keyboard nobody
+is typing at — a forgotten filename is a mistake, not a request. To type a trace
+in by hand, ask for stdin explicitly with `-`.
 
 ### Exit codes
 
