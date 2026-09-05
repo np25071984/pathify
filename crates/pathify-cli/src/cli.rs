@@ -47,6 +47,17 @@ pub enum Command {
     /// finished without naming the address, or --redact-around to fence a
     /// location you can name.
     Clean(CleanArgs),
+
+    /// Draw a trace on an interactive terminal map.
+    ///
+    /// Unlike the other commands this one paints a screen instead of emitting a
+    /// document, so it needs a terminal and cannot be piped into a file.
+    /// Reading the trace itself from a pipe is fine: key presses come from the
+    /// controlling terminal, not from stdin.
+    ///
+    /// Pan with the arrow keys or hjkl, zoom with + and -, press f to fit the
+    /// whole trace, ? for help, and q to quit.
+    View(ViewArgs),
 }
 
 #[derive(Debug, Args)]
@@ -251,6 +262,17 @@ fn parse_geofence(value: &str) -> Result<GeofenceArg, String> {
     }
 
     Ok(GeofenceArg { lat, lon, radius_m })
+}
+
+#[derive(Debug, Args)]
+pub struct ViewArgs {
+    /// Input file, or `-` for stdin.
+    #[arg(default_value = "-", value_name = "FILE")]
+    pub input: PathBuf,
+
+    /// Override input format detection.
+    #[arg(long, value_name = "FORMAT", value_parser = parse_format)]
+    pub from: Option<Format>,
 }
 
 fn parse_format(value: &str) -> Result<Format, String> {
