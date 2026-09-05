@@ -8,7 +8,7 @@ use crate::cli::InfoArgs;
 use crate::io::read_input;
 
 pub fn run(args: &InfoArgs, out: &mut dyn Write) -> Result<()> {
-    let (bytes, path) = read_input(&args.input)?;
+    let (bytes, path) = read_input(args.input.as_deref())?;
     let format = formats::detect(args.from, path.as_deref(), &bytes)?;
     let trace = formats::read(format, &bytes)?;
     let summary = Summary::of(&trace, args.elevation_threshold);

@@ -15,7 +15,7 @@ pub fn run(args: &MergeArgs, out: &mut dyn Write) -> Result<()> {
     let mut traces: Vec<Trace> = Vec::with_capacity(args.inputs.len());
     let mut first_format: Option<Format> = None;
     for input in &args.inputs {
-        let (bytes, path) = read_input(input)?;
+        let (bytes, path) = read_input(Some(input))?;
         let format = formats::detect(args.from, path.as_deref(), &bytes)?;
         first_format.get_or_insert(format);
         traces.push(formats::read(format, &bytes)?);

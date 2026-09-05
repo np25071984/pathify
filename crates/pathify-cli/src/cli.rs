@@ -62,9 +62,9 @@ pub enum Command {
 
 #[derive(Debug, Args)]
 pub struct InfoArgs {
-    /// Input file, or `-` for stdin.
-    #[arg(default_value = "-", value_name = "FILE")]
-    pub input: PathBuf,
+    /// Input file. Omit it to read a piped trace, or pass `-` for stdin.
+    #[arg(value_name = "FILE")]
+    pub input: Option<PathBuf>,
 
     /// Emit JSON instead of a human-readable table.
     #[arg(long)]
@@ -84,9 +84,9 @@ pub struct InfoArgs {
 
 #[derive(Debug, Args)]
 pub struct ConvertArgs {
-    /// Input file, or `-` for stdin.
-    #[arg(default_value = "-", value_name = "FILE")]
-    pub input: PathBuf,
+    /// Input file. Omit it to read a piped trace, or pass `-` for stdin.
+    #[arg(value_name = "FILE")]
+    pub input: Option<PathBuf>,
 
     /// Target format. Optional when `--output` has a recognizable extension.
     #[arg(long, value_name = "FORMAT", value_parser = parse_format)]
@@ -184,9 +184,9 @@ impl MergeArgs {
 
 #[derive(Debug, Args)]
 pub struct CleanArgs {
-    /// Input file, or `-` for stdin.
-    #[arg(default_value = "-", value_name = "FILE")]
-    pub input: PathBuf,
+    /// Input file. Omit it to read a piped trace, or pass `-` for stdin.
+    #[arg(value_name = "FILE")]
+    pub input: Option<PathBuf>,
 
     /// Output format. Defaults to the input's format.
     #[arg(long, value_name = "FORMAT", value_parser = parse_format)]
@@ -266,9 +266,9 @@ fn parse_geofence(value: &str) -> Result<GeofenceArg, String> {
 
 #[derive(Debug, Args)]
 pub struct ViewArgs {
-    /// Input file, or `-` for stdin.
-    #[arg(default_value = "-", value_name = "FILE")]
-    pub input: PathBuf,
+    /// Input file. Omit it to read a piped trace, or pass `-` for stdin.
+    #[arg(value_name = "FILE")]
+    pub input: Option<PathBuf>,
 
     /// Override input format detection.
     #[arg(long, value_name = "FORMAT", value_parser = parse_format)]
@@ -289,6 +289,7 @@ fn parse_format(value: &str) -> Result<Format, String> {
 mod tests {
     use super::*;
     use clap::CommandFactory;
+    use std::path::Path;
 
     fn info_args(argv: &[&str]) -> InfoArgs {
         match Cli::try_parse_from(argv).unwrap().command {
@@ -309,10 +310,13 @@ mod tests {
         Cli::command().debug_assert();
     }
 
+    /// Omitting the file leaves it unset rather than defaulting to `-`, which
+    /// is what lets the command tell "you forgot the filename" apart from "you
+    /// asked for stdin".
     #[test]
-    fn info_defaults_to_stdin() {
+    fn omitting_the_file_leaves_the_input_unset() {
         let args = info_args(&["pathify", "info"]);
-        assert_eq!(args.input, PathBuf::from("-"));
+        assert_eq!(args.input, None);
         assert!(!args.json);
         assert_eq!(args.from, None);
     }
@@ -329,7 +333,7 @@ mod tests {
             "--elevation-threshold",
             "5",
         ]);
-        assert_eq!(args.input, PathBuf::from("ride.gpx"));
+        assert_eq!(args.input.as_deref(), Some(Path::new("ride.gpx")));
         assert!(args.json);
         assert_eq!(args.from, Some(Format::Gpx));
         assert_eq!(args.elevation_threshold, 5.0);
