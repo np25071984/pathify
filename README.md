@@ -4,9 +4,10 @@ A local-first command-line toolkit for GPS trace data — inspect, clean, merge,
 convert, and view GPX, FIT, KML, GeoJSON, and CSV traces without a desktop GIS
 application and without uploading anything anywhere.
 
-> **Status: early.** `info`, `convert`, `merge`, `clean`, and `view` work
-> across GPX, GeoJSON, and CSV today. The remaining commands and format adapters are in progress — see
-> [Roadmap](#roadmap).
+> **Status: 1.0.** `info`, `convert`, `merge`, `clean`, and `view` are stable
+> across GPX, GeoJSON, and CSV — flags, output formats, and exit codes won't
+> break without a major version bump. KML and FIT adapters are still planned —
+> see [Roadmap](#roadmap).
 
 ## Format support
 

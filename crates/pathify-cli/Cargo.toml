@@ -15,7 +15,7 @@ anyhow = "1.0.104"
 chrono = "0.4.45"
 clap = { version = "4.6.6", features = ["derive"] }
 pathify-core.workspace = true
-pathify-tui = { version = "0.1.0", path = "../pathify-tui" }
+pathify-tui.workspace = true
 serde_json = "1.0.151"
 
 [dev-dependencies]
