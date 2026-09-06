@@ -33,6 +33,7 @@ Via Homebrew:
 
 ```sh
 brew tap np25071984/pathify https://github.com/np25071984/pathify
+brew trust np25071984/pathify
 brew install pathify
 ```
 
