@@ -29,7 +29,14 @@ enforced in CI.
 
 ## Install
 
-Requires Rust 1.88 or newer.
+Via Homebrew:
+
+```sh
+brew tap np25071984/pathify https://github.com/np25071984/pathify
+brew install pathify
+```
+
+Or from source — requires Rust 1.88 or newer:
 
 ```sh
 git clone <repository-url> && cd pathify
@@ -316,7 +323,8 @@ jump across one as climb.
 - [x] `view` — interactive braille terminal map
 - [ ] KML adapter
 - [ ] FIT adapter
-- [ ] Distribution via Homebrew and crates.io
+- [x] Distribution via Homebrew
+- [ ] Distribution via crates.io
 
 ## Development
 
