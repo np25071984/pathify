@@ -38,6 +38,13 @@ brew trust np25071984/pathify
 brew install pathify
 ```
 
+Via crates.io — requires Rust 1.88 or newer (note the `-cli`: the plain
+`pathify` name on crates.io belongs to an unrelated crate):
+
+```sh
+cargo install pathify-cli
+```
+
 Or from source — requires Rust 1.88 or newer:
 
 ```sh
@@ -331,7 +338,7 @@ jump across one as climb.
 - [ ] KML adapter
 - [ ] FIT adapter
 - [x] Distribution via Homebrew
-- [ ] Distribution via crates.io
+- [x] Distribution via crates.io
 
 ## Development
 
