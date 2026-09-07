@@ -5,6 +5,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 description = "Trace model, format adapters, and spatial math for Pathify."
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords = ["gps", "gpx", "tcx", "geospatial", "fitness"]
+categories = ["science::geo", "parser-implementations"]
 
 [dependencies]
 chrono = { version = "0.4.45", features = ["serde"] }

@@ -5,6 +5,15 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 description = "Command-line interface for Pathify."
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords = ["gps", "gpx", "cli", "geospatial", "fitness"]
+categories = ["command-line-utilities", "science::geo"]
+# Excluded rather than shipped broken: these integration tests reach for
+# fixtures at the workspace root (`../../tests/fixtures`), which sits outside
+# this crate and so cannot be packaged alongside it.
+exclude = ["tests/*"]
 
 [[bin]]
 name = "pathify"

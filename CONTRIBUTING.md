@@ -68,3 +68,19 @@ Two areas want more rigor than ordinary code:
 New format adapters need a fixture in `tests/fixtures/` and, at minimum, tests
 for reading, writing, a round trip through the model, and a malformed input that
 must produce an error rather than a panic.
+
+## Releasing
+
+The three crates are versioned in lockstep via `workspace.package.version`, and
+published to crates.io in dependency order: `pathify-core`, then `pathify-tui`,
+then `pathify-cli`. `pathify-tui` and `pathify-cli` depend on the others by path
+*and* version (`workspace.dependencies`), so each `cargo publish` step needs the
+one before it to have finished indexing — that usually takes well under a
+minute, but a publish that starts too soon fails with "no matching package
+found" rather than silently using the old version.
+
+`pathify-cli`'s own integration tests are excluded from its published package
+(`exclude = ["tests/*"]`): they reach for fixtures in the workspace-root
+`tests/fixtures/`, which sits outside the crate and cannot be packaged
+alongside it. This only affects `cargo test` on a downloaded source
+distribution — `cargo install pathify-cli` never runs tests.
