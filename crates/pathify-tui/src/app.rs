@@ -9,6 +9,7 @@ use pathify_core::{Point, Summary};
 
 use super::input::Action;
 use super::projection::Drawing;
+use super::units::Units;
 use super::viewport::{PAN_STEP, Viewport, ZOOM_STEP, cell_aspect};
 
 /// Whether the event loop should keep going.
@@ -23,6 +24,11 @@ pub struct App {
     pub drawing: Drawing,
     pub summary: Summary,
     pub show_help: bool,
+    /// Distance units for the status line. Defaults to metric; the terminal
+    /// entry point (`run`) overwrites this with [`Units::detect`] before the
+    /// first draw, so a directly-constructed `App` — as every test builds one
+    /// — stays deterministic.
+    pub units: Units,
     /// `None` until the first draw, when the terminal size is finally known and
     /// the view can be fitted to it.
     viewport: Option<Viewport>,
@@ -38,6 +44,7 @@ impl App {
             drawing: Drawing::of(trace)?,
             summary: Summary::of(trace, DEFAULT_NOISE_THRESHOLD_M),
             show_help: false,
+            units: Units::default(),
             viewport: None,
             aspect: 1.0,
         })

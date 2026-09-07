@@ -13,6 +13,7 @@ pub mod app;
 pub mod input;
 pub mod projection;
 pub mod ui;
+pub mod units;
 pub mod viewport;
 
 use std::io;
@@ -23,6 +24,7 @@ use pathify_core::Trace;
 pub use app::{App, Flow};
 pub use input::Action;
 pub use projection::{Drawing, Projection};
+pub use units::Units;
 pub use viewport::Viewport;
 
 /// Show a trace on an interactive map until the user quits.
@@ -36,6 +38,10 @@ pub fn run(trace: &Trace, title: &str) -> io::Result<bool> {
     let Some(mut app) = App::new(trace, title) else {
         return Ok(false);
     };
+    // Read once from the environment here, at the one edge that already
+    // touches the outside world, so `App` itself stays plain data driven only
+    // by the trace it was given.
+    app.units = Units::detect();
 
     // `try_init` installs a panic hook that restores the terminal first, so a
     // crash in here cannot leave the user with a broken shell.

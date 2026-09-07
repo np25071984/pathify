@@ -269,6 +269,10 @@ stdout with an explanation rather than failing somewhere deep inside a terminal
 library. Piping the *trace* in still works — key presses are read from the
 controlling terminal, not from stdin.
 
+The status line shows metric distances by default, and switches to feet and
+miles when the host's locale says it prefers imperial (checked via
+`LC_ALL`, `LC_MEASUREMENT`, or `LANG`, in that order).
+
 There are no map tiles and never will be: fetching them would mean network
 access. What you get is the trace itself, drawn with braille dots at four times
 the vertical resolution of the character grid, projected so a degree of
