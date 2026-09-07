@@ -1,19 +1,20 @@
 # Pathify
 
 A local-first command-line toolkit for GPS trace data — inspect, clean, merge,
-convert, and view GPX, FIT, KML, GeoJSON, and CSV traces without a desktop GIS
-application and without uploading anything anywhere.
+convert, and view GPX, TCX, FIT, KML, GeoJSON, and CSV traces without a desktop
+GIS application and without uploading anything anywhere.
 
 > **Status: 1.0.** `info`, `convert`, `merge`, `clean`, and `view` are stable
-> across GPX, GeoJSON, and CSV — flags, output formats, and exit codes won't
-> break without a major version bump. KML and FIT adapters are still planned —
-> see [Roadmap](#roadmap).
+> across GPX, TCX, GeoJSON, and CSV — flags, output formats, and exit codes
+> won't break without a major version bump. KML and FIT adapters are still
+> planned — see [Roadmap](#roadmap).
 
 ## Format support
 
 | Format | Read | Write | Notes |
 | --- | :---: | :---: | --- |
 | GPX | ✅ | ✅ | Tracks, routes, and loose waypoints |
+| TCX | ✅ | ✅ | Heart rate, cadence, and speed carry over where present |
 | GeoJSON | ✅ | ✅ | Timestamps via the `coordTimes` convention |
 | CSV | ✅ | ✅ | [Documented column schema](#csv-schema) |
 | KML | — | — | Planned |
@@ -93,7 +94,7 @@ in by hand, ask for stdin explicitly with `-`.
 | Flag | Effect |
 | --- | --- |
 | `--json` | Emit JSON instead of the human-readable table |
-| `--from <FORMAT>` | Override format detection (`gpx`, `fit`, `kml`, `geojson`, `csv`) |
+| `--from <FORMAT>` | Override format detection (`gpx`, `tcx`, `fit`, `kml`, `geojson`, `csv`) |
 | `--elevation-threshold <METERS>` | Ignore elevation changes below this floor (default `3`) |
 
 The elevation threshold is not cosmetic. Consumer GPS elevation jitters by a
@@ -326,6 +327,7 @@ jump across one as climb.
 - [x] `merge` — overlap-aware concatenation and reconciliation
 - [x] `clean` — drift filtering and location redaction
 - [x] `view` — interactive braille terminal map
+- [x] TCX adapter
 - [ ] KML adapter
 - [ ] FIT adapter
 - [x] Distribution via Homebrew

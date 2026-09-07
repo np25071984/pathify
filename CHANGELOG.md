@@ -9,6 +9,11 @@ to CLI flags, output formats, or exit codes requires a major version bump.
 - `view` now reports distance and elevation in feet and miles when the host's
   locale prefers imperial units (as `LC_ALL`, `LC_MEASUREMENT`, or `LANG`
   indicates), and in metres and kilometres otherwise.
+- Added a TCX adapter (read and write): `Activity` maps to a track and each
+  `Track` element — a lap can hold more than one, marking a GPS gap — to a
+  segment. Heart rate, cadence, and speed carry over where the source records
+  them; a trackpoint with no `<Position>` (an indoor activity, say) is dropped
+  rather than invented as `(0, 0)`.
 
 ## 1.0.0
 

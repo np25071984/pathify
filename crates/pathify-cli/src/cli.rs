@@ -341,9 +341,9 @@ mod tests {
 
     #[test]
     fn an_unknown_format_is_rejected_with_the_valid_names() {
-        let err = Cli::try_parse_from(["pathify", "info", "--from", "tcx"]).unwrap_err();
+        let err = Cli::try_parse_from(["pathify", "info", "--from", "kmz"]).unwrap_err();
         let message = err.to_string();
-        assert!(message.contains("tcx"), "{message}");
+        assert!(message.contains("kmz"), "{message}");
         assert!(message.contains("geojson"), "{message}");
     }
 

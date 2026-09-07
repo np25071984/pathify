@@ -86,7 +86,7 @@ fn view_accepts_a_format_override_flag() {
 #[test]
 fn an_unknown_format_is_still_rejected_by_the_parser() {
     pathify()
-        .args(["view", "--from", "tcx"])
+        .args(["view", "--from", "kmz"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("unknown format"));
