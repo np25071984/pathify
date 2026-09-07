@@ -8,7 +8,10 @@ edition = "2024"
 rust-version = "1.88"
 license = "MIT"
 description = "A local-first CLI and TUI for GPS trace data."
+repository = "https://github.com/np25071984/pathify"
+homepage = "https://github.com/np25071984/pathify"
+readme = "README.md"
 
 [workspace.dependencies]
-pathify-core = { path = "crates/pathify-core" }
-pathify-tui = { path = "crates/pathify-tui" }
+pathify-core = { path = "crates/pathify-core", version = "1.1.0" }
+pathify-tui = { path = "crates/pathify-tui", version = "1.1.0" }
