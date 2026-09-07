@@ -6,6 +6,7 @@
 pub mod csv;
 pub mod geojson;
 pub mod gpx;
+pub mod tcx;
 
 use std::io::Write;
 use std::path::Path;
@@ -25,6 +26,7 @@ use crate::model::Trace;
 #[serde(rename_all = "lowercase")]
 pub enum Format {
     Gpx,
+    Tcx,
     Fit,
     Kml,
     GeoJson,
@@ -32,8 +34,9 @@ pub enum Format {
 }
 
 impl Format {
-    pub const ALL: [Format; 5] = [
+    pub const ALL: [Format; 6] = [
         Format::Gpx,
+        Format::Tcx,
         Format::Fit,
         Format::Kml,
         Format::GeoJson,
@@ -43,6 +46,7 @@ impl Format {
     pub const fn name(self) -> &'static str {
         match self {
             Format::Gpx => "gpx",
+            Format::Tcx => "tcx",
             Format::Fit => "fit",
             Format::Kml => "kml",
             Format::GeoJson => "geojson",
@@ -52,12 +56,16 @@ impl Format {
 
     /// Whether reading and writing this format is implemented.
     pub const fn is_implemented(self) -> bool {
-        matches!(self, Format::Gpx | Format::GeoJson | Format::Csv)
+        matches!(
+            self,
+            Format::Gpx | Format::Tcx | Format::GeoJson | Format::Csv
+        )
     }
 
     pub fn from_extension(extension: &str) -> Option<Self> {
         match extension.to_ascii_lowercase().as_str() {
             "gpx" => Some(Format::Gpx),
+            "tcx" => Some(Format::Tcx),
             "fit" => Some(Format::Fit),
             "kml" => Some(Format::Kml),
             "geojson" | "json" => Some(Format::GeoJson),
@@ -94,6 +102,9 @@ impl Format {
             let lowered = trimmed.to_ascii_lowercase();
             if lowered.contains("<gpx") {
                 return Some(Format::Gpx);
+            }
+            if lowered.contains("<trainingcenterdatabase") {
+                return Some(Format::Tcx);
             }
             if lowered.contains("<kml") {
                 return Some(Format::Kml);
@@ -144,6 +155,7 @@ pub fn detect(explicit: Option<Format>, path: Option<&Path>, bytes: &[u8]) -> Re
 pub fn read(format: Format, bytes: &[u8]) -> Result<Trace> {
     match format {
         Format::Gpx => gpx::read(bytes),
+        Format::Tcx => tcx::read(bytes),
         Format::GeoJson => geojson::read(bytes),
         Format::Csv => csv::read(bytes),
         Format::Fit => Err(Error::UnsupportedFormat("FIT")),
@@ -155,6 +167,7 @@ pub fn read(format: Format, bytes: &[u8]) -> Result<Trace> {
 pub fn write(format: Format, trace: &Trace, out: &mut dyn Write) -> Result<()> {
     match format {
         Format::Gpx => gpx::write(trace, out),
+        Format::Tcx => tcx::write(trace, out),
         Format::GeoJson => geojson::write(trace, out),
         Format::Csv => csv::write(trace, out),
         Format::Fit => Err(Error::UnsupportedFormat("FIT")),
@@ -181,14 +194,17 @@ mod tests {
             Format::from_path(Path::new("/tmp/Ride.GPX")),
             Some(Format::Gpx)
         );
-        assert_eq!(Format::from_extension("tcx"), None);
+        assert_eq!(Format::from_extension("kmz"), None);
     }
 
     #[test]
-    fn sniffs_gpx_and_kml_apart() {
+    fn sniffs_gpx_tcx_and_kml_apart() {
         let gpx = br#"<?xml version="1.0"?><gpx version="1.1"><trk></trk></gpx>"#;
+        let tcx =
+            br#"<?xml version="1.0"?><TrainingCenterDatabase xmlns="x"></TrainingCenterDatabase>"#;
         let kml = br#"<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"></kml>"#;
         assert_eq!(Format::sniff(gpx), Some(Format::Gpx));
+        assert_eq!(Format::sniff(tcx), Some(Format::Tcx));
         assert_eq!(Format::sniff(kml), Some(Format::Kml));
     }
 

@@ -70,7 +70,7 @@ fn conversion_preserves_the_metrics_info_reports() {
         .unwrap();
     let original: serde_json::Value = serde_json::from_slice(&original.stdout).unwrap();
 
-    for format in ["geojson", "csv"] {
+    for format in ["geojson", "csv", "tcx"] {
         let converted = pathify()
             .args(["convert", "--to", format])
             .arg(fixture("ride.gpx"))
