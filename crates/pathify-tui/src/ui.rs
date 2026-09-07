@@ -10,6 +10,7 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use super::app::App;
 use super::input::{HELP, HINTS, HINTS_SHORT};
+use super::units::Units;
 
 const TRACK_COLOR: Color = Color::Cyan;
 const START_COLOR: Color = Color::Green;
@@ -92,12 +93,12 @@ fn draw_status(frame: &mut Frame, app: &App, area: Rect) {
     // Most interesting first, because the tail is what gets dropped when the
     // terminal is narrow.
     let mut metrics = vec![format!("{} pts", app.summary.points)];
-    metrics.push(format_distance(app.summary.distance_m));
+    metrics.push(format_distance(app.summary.distance_m, app.units));
     if let Some(elevation) = &app.summary.elevation {
-        metrics.push(format!("+{:.0} m", elevation.gain_m));
+        metrics.push(format_elevation(elevation.gain_m, app.units));
     }
     if let Some(width) = app.ground_width_m() {
-        metrics.push(format!("{} across", format_distance(width)));
+        metrics.push(format!("{} across", format_distance(width, app.units)));
     }
     if let Some((lat, lon)) = app.center_coordinates() {
         metrics.push(format!("{lat:.4}, {lon:.4}"));
@@ -199,15 +200,45 @@ fn draw_help(frame: &mut Frame, area: Rect) {
     );
 }
 
-/// Meters below a kilometre, kilometres above it.
+/// Metres per foot, the conversion both imperial forms below are built on.
+const METERS_PER_FOOT: f64 = 0.3048;
+
+/// Metres per mile (5280 feet), i.e. the point at which imperial distances
+/// switch from feet to miles.
+const METERS_PER_MILE: f64 = METERS_PER_FOOT * 5280.0;
+
+/// Meters below a kilometre, kilometres above it — or feet and miles at the
+/// same thresholds, when the host prefers imperial.
 ///
 /// A view 340 m across should say so rather than reporting `0.34 km`, and a
 /// long ride should not be a five-digit meter count.
-pub fn format_distance(meters: f64) -> String {
-    if meters < 1000.0 {
-        format!("{meters:.0} m")
-    } else {
-        format!("{:.2} km", meters / 1000.0)
+pub fn format_distance(meters: f64, units: Units) -> String {
+    match units {
+        Units::Metric => {
+            if meters < 1000.0 {
+                format!("{meters:.0} m")
+            } else {
+                format!("{:.2} km", meters / 1000.0)
+            }
+        }
+        Units::Imperial => {
+            if meters < METERS_PER_MILE {
+                format!("{:.0} ft", meters / METERS_PER_FOOT)
+            } else {
+                format!("{:.2} mi", meters / METERS_PER_MILE)
+            }
+        }
+    }
+}
+
+/// Elevation gain, always reported as a short-range reading: meters for
+/// metric, feet for imperial. Unlike [`format_distance`] this never crosses
+/// into kilometres or miles — a climb large enough for that would be an
+/// error, not a real trace.
+pub fn format_elevation(meters: f64, units: Units) -> String {
+    match units {
+        Units::Metric => format!("+{meters:.0} m"),
+        Units::Imperial => format!("+{:.0} ft", meters / METERS_PER_FOOT),
     }
 }
 
@@ -217,11 +248,25 @@ mod tests {
 
     #[test]
     fn distances_switch_units_at_a_kilometre() {
-        assert_eq!(format_distance(0.0), "0 m");
-        assert_eq!(format_distance(340.4), "340 m");
-        assert_eq!(format_distance(999.0), "999 m");
-        assert_eq!(format_distance(1000.0), "1.00 km");
-        assert_eq!(format_distance(2109.57), "2.11 km");
+        assert_eq!(format_distance(0.0, Units::Metric), "0 m");
+        assert_eq!(format_distance(340.4, Units::Metric), "340 m");
+        assert_eq!(format_distance(999.0, Units::Metric), "999 m");
+        assert_eq!(format_distance(1000.0, Units::Metric), "1.00 km");
+        assert_eq!(format_distance(2109.57, Units::Metric), "2.11 km");
+    }
+
+    #[test]
+    fn imperial_distances_switch_units_at_a_mile() {
+        assert_eq!(format_distance(0.0, Units::Imperial), "0 ft");
+        assert_eq!(format_distance(304.8, Units::Imperial), "1000 ft");
+        assert_eq!(format_distance(1609.344, Units::Imperial), "1.00 mi");
+        assert_eq!(format_distance(3218.688, Units::Imperial), "2.00 mi");
+    }
+
+    #[test]
+    fn elevation_follows_the_same_units() {
+        assert_eq!(format_elevation(42.0, Units::Metric), "+42 m");
+        assert_eq!(format_elevation(0.3048, Units::Imperial), "+1 ft");
     }
 
     /// Columns the status line actually occupies, counted the way a terminal
