@@ -193,6 +193,72 @@ fn a_negative_radius_is_refused() {
         .stderr(predicate::str::contains("zero or more"));
 }
 
+/// The reported bug: a latitude south of the equator starts with a minus sign,
+/// and clap read the whole value as an unknown flag. `pathify clean` then
+/// refused every southern-hemisphere fence with "unexpected argument '-3'",
+/// which named neither the flag nor the real problem.
+#[test]
+fn a_southern_hemisphere_fence_is_accepted() {
+    pathify()
+        .arg("clean")
+        .arg(fixture("ride.gpx"))
+        .args(["--redact-around", "-33.8688,151.2093,300"])
+        .assert()
+        .success();
+}
+
+/// Accepting the argument is not the point; removing the location is. This
+/// fences a point in Sydney out of a trace recorded there, and checks the
+/// published bytes rather than the parsed model — what leaks an address is
+/// what ends up in the file someone shares.
+#[test]
+fn a_southern_hemisphere_fence_removes_the_location() {
+    // Three fixes a few hundred metres apart, the middle one at the fence.
+    let csv = "lat,lon\n-33.8650,151.2093\n-33.8688,151.2093\n-33.8720,151.2093\n";
+
+    let output = pathify()
+        .args(["clean", "-", "--to", "csv"])
+        .args(["--redact-around", "-33.8688,151.2093,200"])
+        .write_stdin(csv)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("CSV output should be UTF-8");
+    assert!(
+        !text.contains("-33.8688"),
+        "the fenced coordinate is still in the output:\n{text}"
+    );
+    // The neighbours are outside the fence and must survive, or the fence is
+    // eating the trace rather than a location in it.
+    assert!(text.contains("-33.865"), "{text}");
+    assert!(text.contains("-33.872"), "{text}");
+}
+
+/// With the value reaching `parse_geofence` at last, its own validation has to
+/// be reachable for southern fences too — previously clap rejected these
+/// first, with a message about neither the radius nor the range.
+#[test]
+fn validation_still_applies_to_southern_hemisphere_fences() {
+    pathify()
+        .arg("clean")
+        .arg(fixture("ride.gpx"))
+        .args(["--redact-around", "-33.8688,151.2093,-100"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("zero or more"));
+
+    pathify()
+        .arg("clean")
+        .arg(fixture("ride.gpx"))
+        .args(["--redact-around", "-947.6,151.2093,100"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("outside -90..=90"));
+}
+
 #[test]
 fn an_out_of_range_coordinate_is_refused() {
     pathify()

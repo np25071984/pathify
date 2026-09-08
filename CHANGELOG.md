@@ -4,6 +4,18 @@ All notable changes to Pathify are documented here. This project follows
 [Semantic Versioning](https://semver.org/): once released, a breaking change
 to CLI flags, output formats, or exit codes requires a major version bump.
 
+## Unreleased
+
+### Fixed
+
+- `clean --redact-around` accepted no latitude south of the equator. A leading
+  minus sign made the argument parser read the whole value as an unknown flag,
+  so every southern-hemisphere fence failed with `unexpected argument '-3'` —
+  a message naming neither the flag nor the problem — and the fence's own
+  validation never ran to explain it. Redaction by coordinate was unusable for
+  half the planet unless you knew to write `--redact-around=<value>`. It failed
+  closed, so nothing leaked.
+
 ## 1.1.0
 
 - `view` now reports distance and elevation in feet and miles when the host's

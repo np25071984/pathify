@@ -209,7 +209,16 @@ pub struct CleanArgs {
     pub max_speed: f64,
 
     /// Remove everything within RADIUS meters of LAT,LON. Repeatable.
-    #[arg(long, value_name = "LAT,LON,RADIUS", value_parser = parse_geofence)]
+    // `allow_hyphen_values` because a southern-hemisphere latitude starts with
+    // a minus sign, and without it clap reads the whole value as an unknown
+    // flag — so the fence was unusable for half the planet, and
+    // `parse_geofence` never ran to say why.
+    #[arg(
+        long,
+        value_name = "LAT,LON,RADIUS",
+        allow_hyphen_values = true,
+        value_parser = parse_geofence
+    )]
     pub redact_around: Vec<GeofenceArg>,
 
     /// Remove everything within this many meters of where the trace starts and
@@ -308,6 +317,55 @@ mod tests {
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    /// A latitude south of the equator starts with a minus sign, which clap
+    /// reads as the start of another flag unless told otherwise. Without
+    /// `allow_hyphen_values` this fails with "unexpected argument '-3'" and
+    /// `parse_geofence` never runs, so redaction by coordinate was unusable
+    /// across the whole southern hemisphere.
+    #[test]
+    fn a_southern_hemisphere_fence_is_a_value_not_a_flag() {
+        let parsed = Cli::try_parse_from([
+            "pathify",
+            "clean",
+            "ride.gpx",
+            "--redact-around",
+            "-33.8688,151.2093,300",
+        ])
+        .expect("a negative latitude should parse");
+
+        let Command::Clean(args) = parsed.command else {
+            panic!("expected `clean`");
+        };
+        assert_eq!(
+            args.redact_around,
+            vec![GeofenceArg {
+                lat: -33.8688,
+                lon: 151.2093,
+                radius_m: 300.0,
+            }]
+        );
+    }
+
+    /// The same for a fence at negative latitude *and* longitude, which is
+    /// most of South America and the South Atlantic.
+    #[test]
+    fn a_fence_negative_on_both_axes_parses() {
+        let parsed = Cli::try_parse_from([
+            "pathify",
+            "clean",
+            "ride.gpx",
+            "--redact-around",
+            "-34.6037,-58.3816,500",
+        ])
+        .expect("a fence negative on both axes should parse");
+
+        let Command::Clean(args) = parsed.command else {
+            panic!("expected `clean`");
+        };
+        assert_eq!(args.redact_around[0].lat, -34.6037);
+        assert_eq!(args.redact_around[0].lon, -58.3816);
     }
 
     /// Omitting the file leaves it unset rather than defaulting to `-`, which
