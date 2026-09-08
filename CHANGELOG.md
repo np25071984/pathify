@@ -4,6 +4,43 @@ All notable changes to Pathify are documented here. This project follows
 [Semantic Versioning](https://semver.org/): once released, a breaking change
 to CLI flags, output formats, or exit codes requires a major version bump.
 
+## Unreleased
+
+### Added
+
+- `render`, which draws a trace onto a map image and writes a PNG. Pathify
+  still fetches nothing: `render` takes a basemap PNG you already have, plus
+  the geographic box that image covers, so the network half of the job stays in
+  your shell. Two modes — the track stroked over the map, or `--fog`, which
+  darkens the whole map and clears it again along the route so the only map you
+  can read is the ground you covered.
+  - Either input may be the piped one, decided by content rather than
+    position: a PNG signature is the basemap, anything else is the trace. So
+    `cat map.png | pathify render ride.gpx` and
+    `pathify clean ride.gpx | pathify render --basemap map.png` both work.
+  - `--bbox` defaults to the trace's own bounds, which is correct when the
+    image was fetched for the bbox `info` reports. A basemap whose proportions
+    do not match the box it is said to cover is reported on stderr, since that
+    is the signature of an image fetched for a different area.
+  - `--reveal`, the width of the corridor fog lifts along, takes its unit
+    inline like every other measured flag: `--reveal 20ft` is feet, a bare
+    `--reveal 20` is meters. The host locale chooses only the default, so it
+    can no longer change what a radius you wrote down means.
+- `info` now reports a `bbox` row, and a `bbox` array in `--json`: the same box
+  as `bounds` but longitude first, in the order GeoJSON and map services'
+  `bbox=` parameters use, and to six decimal places so it can be pasted into a
+  download without a visible offset.
+
+### Internal
+
+- New crate `pathify-render`, isolated the way `pathify-tui` is, so the `png`
+  dependency never enters the pipeline commands' dependency graph. It carries
+  its own Web Mercator projection: the terminal map's equirectangular one is
+  right for a trace drawn on its own and wrong over a downloaded map.
+- `Units` moved from `pathify-tui` to `pathify-core`, so `render` can read the
+  locale for `--reveal` without depending on the terminal crate. Still
+  re-exported from `pathify-tui`.
+
 ## 1.2.0
 
 ### Added

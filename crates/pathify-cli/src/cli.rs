@@ -66,6 +66,17 @@ pub enum Command {
     /// Pan with the arrow keys or hjkl, zoom with + and -, press f to fit the
     /// whole trace, ? for help, and q to quit.
     View(ViewArgs),
+
+    /// Draw a trace onto a map image you already have, as a PNG.
+    ///
+    /// Pathify never downloads the map: it has no network code and is not
+    /// going to get any. Get the area from `pathify info`'s bbox row, fetch a
+    /// PNG of it yourself, and pass it here.
+    ///
+    /// Two modes. By default the track is stroked over the map. With --fog the
+    /// map is darkened instead and cleared again along the route, so the only
+    /// map you can read is the ground you actually covered.
+    Render(RenderArgs),
 }
 
 #[derive(Debug, Args)]
@@ -308,6 +319,137 @@ pub struct ViewArgs {
     /// Override input format detection.
     #[arg(long, value_name = "FORMAT", value_parser = parse_format)]
     pub from: Option<Format>,
+}
+
+#[derive(Debug, Args)]
+pub struct RenderArgs {
+    /// Trace file. Omit it to read a piped trace, or pass `-` for stdin.
+    #[arg(value_name = "FILE")]
+    pub input: Option<PathBuf>,
+
+    /// Basemap PNG. Omit it to read a piped image.
+    #[arg(long, value_name = "FILE")]
+    pub basemap: Option<PathBuf>,
+
+    /// Area the basemap covers. Defaults to the trace's own bounds, which is
+    /// right when the image was downloaded for `pathify info`'s bbox.
+    // `allow_hyphen_values` because half the world's longitudes are negative:
+    // without it `--bbox -122.3,47.6,-122.2,47.7` is read as an unknown flag,
+    // which makes the command unusable west of Greenwich.
+    #[arg(
+        long,
+        value_name = "MIN_LON,MIN_LAT,MAX_LON,MAX_LAT",
+        allow_hyphen_values = true,
+        value_parser = parse_bbox
+    )]
+    pub bbox: Option<BboxArg>,
+
+    /// Darken the map and clear it again only along the route.
+    #[arg(long)]
+    pub fog: bool,
+
+    /// How far either side of the route the fog lifts, e.g. `6m` or `20ft`.
+    /// Defaults to `6m`, or `20ft` where the locale prefers imperial.
+    #[arg(
+        long,
+        value_name = "DISTANCE",
+        value_parser = parse_distance,
+        requires = "fog"
+    )]
+    pub reveal: Option<f64>,
+
+    /// How dark the fog is, from 0 (none) to 1 (black). Defaults to 0.65.
+    #[arg(long, value_name = "0..1", requires = "fog")]
+    pub fog_opacity: Option<f64>,
+
+    /// Colour of the drawn track.
+    #[arg(long, value_name = "#RRGGBB", conflicts_with = "fog", value_parser = parse_hex_color)]
+    pub track_color: Option<[u8; 3]>,
+
+    /// Stroke width of the drawn track, in pixels.
+    #[arg(long, value_name = "PX", conflicts_with = "fog")]
+    pub track_width: Option<f64>,
+
+    /// Override input format detection for the trace.
+    #[arg(long, value_name = "FORMAT", value_parser = parse_format)]
+    pub from: Option<Format>,
+
+    /// Write the PNG to this file instead of stdout.
+    #[arg(short, long, value_name = "FILE")]
+    pub output: Option<PathBuf>,
+}
+
+/// A `min_lon,min_lat,max_lon,max_lat` box from the command line.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BboxArg([f64; 4]);
+
+impl BboxArg {
+    pub fn into_inner(self) -> [f64; 4] {
+        self.0
+    }
+}
+
+/// Parse a bounding box in the order every map service's `bbox=` uses.
+///
+/// Longitude first, which is the opposite of how the `bounds` line reads. The
+/// two orders are easy to confuse and a transposed box downloads a map from the
+/// other side of the world, so both numbers are range-checked against their own
+/// axis — a latitude in a longitude slot is usually still in range, but a
+/// longitude in a latitude slot is caught here rather than in a puzzling image.
+fn parse_bbox(value: &str) -> Result<BboxArg, String> {
+    let parts: Vec<&str> = value.split(',').map(str::trim).collect();
+    let [min_lon, min_lat, max_lon, max_lat] = parts.as_slice() else {
+        return Err(format!(
+            "expected MIN_LON,MIN_LAT,MAX_LON,MAX_LAT (four comma-separated \
+             numbers), got `{value}`"
+        ));
+    };
+
+    let number = |text: &str, name: &str| -> Result<f64, String> {
+        text.parse::<f64>()
+            .map_err(|_| format!("`{text}` is not a number for {name}"))
+    };
+
+    let (min_lon, min_lat, max_lon, max_lat) = (
+        number(min_lon, "minimum longitude")?,
+        number(min_lat, "minimum latitude")?,
+        number(max_lon, "maximum longitude")?,
+        number(max_lat, "maximum latitude")?,
+    );
+
+    for (name, lat) in [("minimum", min_lat), ("maximum", max_lat)] {
+        if !(-90.0..=90.0).contains(&lat) {
+            return Err(format!("{name} latitude {lat} is outside -90..=90"));
+        }
+    }
+    for (name, lon) in [("minimum", min_lon), ("maximum", max_lon)] {
+        if !(-180.0..=180.0).contains(&lon) {
+            return Err(format!("{name} longitude {lon} is outside -180..=180"));
+        }
+    }
+    // A box with no extent, or an inverted one, describes no image. Accepting
+    // it would mean rendering onto coordinates that are infinities.
+    if min_lon >= max_lon || min_lat >= max_lat {
+        return Err(format!(
+            "the box has no extent: expected MIN_LON,MIN_LAT,MAX_LON,MAX_LAT \
+             with both minimums below their maximums, got `{value}`"
+        ));
+    }
+
+    Ok(BboxArg([min_lon, min_lat, max_lon, max_lat]))
+}
+
+/// Parse `#RRGGBB`, with or without the hash.
+fn parse_hex_color(value: &str) -> Result<[u8; 3], String> {
+    let digits = value.strip_prefix('#').unwrap_or(value);
+    if digits.len() != 6 || !digits.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("expected a colour as #RRGGBB, got `{value}`"));
+    }
+    let channel = |at: usize| u8::from_str_radix(&digits[at..at + 2], 16);
+    match (channel(0), channel(2), channel(4)) {
+        (Ok(r), Ok(g), Ok(b)) => Ok([r, g, b]),
+        _ => Err(format!("expected a colour as #RRGGBB, got `{value}`")),
+    }
 }
 
 fn parse_format(value: &str) -> Result<Format, String> {

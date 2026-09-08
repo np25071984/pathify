@@ -1,4 +1,8 @@
-//! Whether the status line reports distance in metres or in feet and miles.
+//! Whether distances are reported in metres or in feet and miles.
+//!
+//! In core rather than in an interface crate because more than one asks:
+//! the terminal map's status line formats what it shows, and `render`
+//! interprets the reveal radius it is given.
 
 /// Distance units to format numbers in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,13 +1,14 @@
 # Pathify
 
 A local-first command-line toolkit for GPS trace data — inspect, clean, merge,
-convert, and view GPX, TCX, FIT, KML, GeoJSON, and CSV traces without a desktop
+convert, view, and render GPX, TCX, FIT, KML, GeoJSON, and CSV traces without a desktop
 GIS application and without uploading anything anywhere.
 
-> **Status: 1.0.** `info`, `convert`, `merge`, `clean`, and `view` are stable
+> **Status: 1.2.** `info`, `convert`, `merge`, `clean`, and `view` are stable
 > across GPX, TCX, GeoJSON, and CSV — flags, output formats, and exit codes
-> won't break without a major version bump. KML and FIT adapters are still
-> planned — see [Roadmap](#roadmap).
+> won't break without a major version bump. `render` is new in 1.2 and its
+> flags may still settle. KML and FIT adapters are still planned — see
+> [Roadmap](#roadmap).
 
 ## Format support
 
@@ -73,6 +74,7 @@ Burke-Gilman morning
   elevation   +19 m / -11 m  (12–31 m)
   time        2024-05-01 15:00:00 → 2024-05-01 15:06:30 UTC
   bounds      47.6535, -122.3056 → 47.6651, -122.2745
+  bbox        -122.305600,47.653500,-122.274500,47.665100
 ```
 
 Every command reads a file or piped input, writes results to stdout, and sends
@@ -131,6 +133,14 @@ person and meters to another.
 | `--json` | Emit JSON instead of the human-readable table |
 | `--from <FORMAT>` | Override format detection (`gpx`, `tcx`, `fit`, `kml`, `geojson`, `csv`) |
 | `--elevation-threshold <DISTANCE>` | Ignore elevation changes below this floor (default `3m`) |
+
+`bounds` and `bbox` are the same box twice. `bounds` reads the way people say
+coordinates — latitude first, corner to corner. `bbox` is longitude first, in
+the order GeoJSON and every map service's `bbox=` parameter use, so it can be
+pasted into a download without transposing the world. It carries two more
+decimal places than `bounds` for the same reason: four is fine to read but is
+about 11 m of error, which shows as a visible offset once a trace is drawn on
+a map fetched with it. See [`pathify render`](#pathify-render).
 
 The elevation threshold is not cosmetic. Consumer GPS elevation jitters by a
 couple of meters at rest, so summing raw deltas reports hundreds of meters of
@@ -316,8 +326,120 @@ the vertical resolution of the character grid, projected so a degree of
 longitude is drawn shorter than a degree of latitude — without that correction
 every route comes out stretched sideways.
 
+If you want the trace over an actual map, that is
+[`pathify render`](#pathify-render), which draws onto a map image you fetched
+yourself. Pathify still makes no request either way.
+
 Segments are drawn separately here too, so a pause or a dropout shows as a break
 in the line rather than a stroke across ground nobody covered.
+
+### `pathify render`
+
+```sh
+pathify render ride.gpx --basemap map.png -o ride.png     # track over the map
+pathify render ride.gpx --basemap map.png --fog -o fog.png # fog of war
+cat map.png | pathify render ride.gpx > ride.png           # the map, piped in
+pathify clean ride.gpx | pathify render --basemap map.png > ride.png
+```
+
+| Flag | Effect |
+| --- | --- |
+| `--basemap <FILE>` | The map image, as a PNG. Omit it to read a piped image |
+| `--bbox <MIN_LON,MIN_LAT,MAX_LON,MAX_LAT>` | Area the basemap covers. Defaults to the trace's own bounds |
+| `--fog` | Darken the map and clear it again only along the route |
+| `--reveal <DISTANCE>` | Width of the cleared corridor either side of the route (default `6m`, or `20ft` on an imperial locale) |
+| `--fog-opacity <0..1>` | How dark the fog is (default `0.65`) |
+| `--track-color <#RRGGBB>` | Colour of the drawn track |
+| `--track-width <PX>` | Stroke width of the drawn track |
+| `--from <FORMAT>` | Override input format detection for the trace |
+| `--output, -o <FILE>` | Write the PNG to a file instead of stdout |
+
+Pathify does not download the map, and cannot: there is no network code to do
+it with. `render` takes a PNG you already have, plus the geographic box that
+image covers, and composites the trace onto it. That split is the whole design
+— the fetching happens in your shell, where you can see it, and the trace never
+leaves the machine.
+
+Three steps:
+
+```sh
+pathify info ride.gpx                 # read the bbox row
+# fetch a PNG of that box, however you like
+pathify render ride.gpx --basemap map.png -o ride.png
+```
+
+Omitting `--bbox` assumes the image spans exactly the trace's own bounds, which
+is true when you fetched it for the bbox `info` printed. Pass `--bbox`
+explicitly whenever it isn't — a screenshot, a wider area, a map you already
+had. Pathify cannot check: a PNG carries no geographic metadata, so the box is
+something it has to be told. What it can do is notice when the image is not the
+*shape* its box implies, and it says so on stderr rather than handing back a
+picture that looks right and puts the route in the wrong place.
+
+#### Getting a basemap
+
+Any PNG rendered in Web Mercator works — which is every general-purpose web
+map. What matters is knowing the box it covers.
+
+OpenStreetMap's own `cgi-bin/export` endpoint used to take a `bbox=` and now
+requires a token, so the dependable route is tiles. A tile's box is exactly
+computable from its `z/x/y`, which makes it the one basemap whose extent you
+never have to guess:
+
+```sh
+curl -A 'my-tool/1.0 (contact@example.com)' \
+  -o map.png https://tile.openstreetmap.org/15/5251/11437.png
+
+pathify render tests/fixtures/ride.gpx --basemap map.png \
+  --bbox -122.310791,47.650588,-122.299805,47.657988 -o ride.png
+```
+
+That box comes from the standard tile formulas — for tile `z/x/y`, longitude is
+`x / 2^z × 360 - 180` and latitude is `atan(sinh(π × (1 - 2y / 2^z)))` in
+degrees, taking `x`/`y` for one edge and `x+1`/`y+1` for the other. Stitch a
+grid of tiles for a bigger area and the box is the union, computed the same
+way.
+
+A box that does not overlap the trace is caught rather than rendered as an
+untouched copy of the map, which is the usual sign of a tile picked one row
+off:
+
+```console
+$ pathify render ride.gpx --basemap map.png --bbox -122.310791,47.657988,-122.299805,47.665387
+pathify: no part of the trace falls inside the basemap's bounding box
+```
+
+Any static-map service that accepts a bounding box works too, and gives you the
+box for free. Whichever you use, it is *their* service: mind the usage policy,
+and do not point a loop at a volunteer-run tile server.
+
+#### The two modes
+
+Plain mode strokes the track over the map, with a green mark where the trace
+starts and a red one where it ends — the same colour meanings the terminal map
+uses.
+
+`--fog` does something different. It darkens the whole basemap and lifts the
+darkness along the route, so the only map you can read is the ground you
+actually covered. No line is drawn in this mode: the cleared corridor *is* the
+track, and a stroke down the middle of it would only repeat what the shape
+already says. That is also why `--track-color` and `--track-width` are refused
+with `--fog` rather than silently ignored.
+
+`--reveal` is a ground distance, not a pixel count, so the same command clears
+a comparable corridor whatever the scale of the map. It takes its unit inline
+like every other measured flag — `--reveal 20ft` is feet, and a bare
+`--reveal 20` is meters wherever you are. The host locale only chooses the
+default, so saying nothing gets you a round `20ft` where imperial is preferred
+and `6m` otherwise, the same check the terminal map's status line makes.
+
+Segments are kept apart here as everywhere else. A pause or a dropout leaves a
+gap in the stroke, and in fog mode leaves the ground between two segments
+fogged: nobody covered it, so it is not revealed.
+
+Being a document rather than a screen, `render` composes like the other
+commands — it writes a PNG to stdout, and refuses to do so when stdout is a
+terminal, since that is a screenful of garbage and sometimes a wedged shell.
 
 #### CSV schema
 
@@ -339,12 +461,13 @@ space-separated form spreadsheets produce.
 
 ## Architecture
 
-Three crates, so the spatial logic stays free of interface concerns:
+Four crates, so the spatial logic stays free of interface concerns:
 
 | Crate | Responsibility |
 | --- | --- |
 | `pathify-core` | Trace model, format adapters, spatial math. No CLI, TUI, or network dependencies. |
 | `pathify-cli` | Argument parsing, stdin/stdout plumbing, exit codes. Thin. |
+| `pathify-render` | Web Mercator projection and PNG compositing for `render`. Isolated so `png` never reaches the pipeline commands. |
 | `pathify-tui` | The interactive terminal map. Isolated so `ratatui` never reaches the pipeline commands. |
 
 Every adapter reads into and writes out of one `Trace` model
@@ -363,6 +486,7 @@ jump across one as climb.
 - [x] `merge` — overlap-aware concatenation and reconciliation
 - [x] `clean` — drift filtering and location redaction
 - [x] `view` — interactive braille terminal map
+- [x] `render` — trace drawn onto a bitmap basemap, plain or fog-of-war
 - [x] TCX adapter
 - [ ] KML adapter
 - [ ] FIT adapter

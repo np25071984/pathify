@@ -28,6 +28,12 @@ changed; an absent dependency cannot.
   belongs in core.
 - `pathify-tui` — the interactive map. Nothing else may depend on it except the
   `view` command.
+- `pathify-render` — Web Mercator projection and PNG compositing. Depends on
+  core and `png` and nothing else; nothing may depend on it except the `render`
+  command. Note that this is a *second* projection, deliberately: the terminal
+  map projects equirectangularly, which is right for a picture of a trace on
+  its own, and wrong over a downloaded map, which is Mercator. Drawing one with
+  the other shears the track away from the roads it followed.
 
 ## Conventions that carry meaning
 
@@ -60,7 +66,9 @@ Two areas want more rigor than ordinary code:
 
 - **Spatial math.** Assert against known real-world reference values, not just
   self-consistency — a symmetric round-trip test passes happily with latitude
-  and longitude transposed. See `spatial::distance` for the pattern.
+  and longitude transposed. See `spatial::distance` for the pattern, and
+  `pathify-render`'s `mercator` module, which checks published EPSG:3857
+  northings rather than its own output fed back in.
 - **Redaction.** When location redaction lands, a false negative is a real
   privacy leak rather than a cosmetic bug. It gets fixture-based tests asserting
   that sensitive coordinates never appear in output.
@@ -71,13 +79,14 @@ must produce an error rather than a panic.
 
 ## Releasing
 
-The three crates are versioned in lockstep via `workspace.package.version`, and
-published to crates.io in dependency order: `pathify-core`, then `pathify-tui`,
-then `pathify-cli`. `pathify-tui` and `pathify-cli` depend on the others by path
-*and* version (`workspace.dependencies`), so each `cargo publish` step needs the
-one before it to have finished indexing — that usually takes well under a
-minute, but a publish that starts too soon fails with "no matching package
-found" rather than silently using the old version.
+The four crates are versioned in lockstep via `workspace.package.version`, and
+published to crates.io in dependency order: `pathify-core` first, then
+`pathify-tui` and `pathify-render` in either order, then `pathify-cli`. Every
+crate depends on the others by path *and* version
+(`workspace.dependencies`), so each `cargo publish` step needs the ones before
+it to have finished indexing — that usually takes well under a minute, but a
+publish that starts too soon fails with "no matching package found" rather than
+silently using the old version.
 
 `pathify-cli`'s own integration tests are excluded from its published package
 (`exclude = ["tests/*"]`): they reach for fixtures in the workspace-root

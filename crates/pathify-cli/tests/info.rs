@@ -142,3 +142,44 @@ fn a_format_without_an_adapter_says_so_plainly() {
         .stderr(predicate::str::contains("FIT"))
         .stderr(predicate::str::contains("not implemented yet"));
 }
+
+/// The bbox row exists to be pasted into a map download, so its order is the
+/// one `bbox=` parameters use — longitude first, the opposite of the `bounds`
+/// line right above it.
+#[test]
+fn reports_a_bbox_in_longitude_first_order() {
+    pathify()
+        .arg("info")
+        .arg(fixture("ride.gpx"))
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("bounds      47.6535, -122.3056 \u{2192} 47.6651, -122.2745")
+                .and(predicate::str::contains(
+                    "bbox        -122.305600,47.653500,-122.274500,47.665100",
+                )),
+        );
+}
+
+#[test]
+fn the_json_carries_the_bbox_as_four_numbers() {
+    let output = pathify()
+        .args(["info", "--json"])
+        .arg(fixture("ride.gpx"))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let json: serde_json::Value = serde_json::from_slice(&output).expect("valid JSON");
+    let bbox = json["bbox"].as_array().expect("a bbox array");
+    assert_eq!(bbox.len(), 4);
+    assert_eq!(bbox[0].as_f64().unwrap(), -122.3056);
+    assert_eq!(bbox[1].as_f64().unwrap(), 47.6535);
+    assert_eq!(bbox[2].as_f64().unwrap(), -122.2745);
+    assert_eq!(bbox[3].as_f64().unwrap(), 47.6651);
+
+    // `bounds` is still there in its own order, for anyone already reading it.
+    assert_eq!(json["bounds"]["min_lat"].as_f64().unwrap(), 47.6535);
+}
