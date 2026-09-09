@@ -85,6 +85,32 @@ fn no_dedup_keeps_every_point() {
     assert_eq!(merged["points"], 22, "10 + 12 with nothing matched");
 }
 
+/// `m` on a duration reads as minutes to one person and meters to another, so
+/// `--dedup-window 5m` has to be refused rather than silently applied as a
+/// window sixty times the intended one.
+#[test]
+fn an_ambiguous_m_on_the_dedup_window_is_refused() {
+    pathify()
+        .arg("merge")
+        .arg(fixture("ride.gpx"))
+        .arg(fixture("ride.gpx"))
+        .args(["--dedup-window", "5m"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("ambiguous"))
+        .stderr(predicate::str::contains("min"));
+}
+
+/// A window given in minutes has to reach the merge as the seconds it means.
+#[test]
+fn a_window_in_minutes_matches_the_same_window_in_seconds() {
+    let minutes = info_of(merge_fixtures(&["--dedup-window", "2min"]));
+    let seconds = info_of(merge_fixtures(&["--dedup-window", "120"]));
+
+    assert_eq!(minutes["points"], seconds["points"]);
+    assert_eq!(minutes["distance_m"], seconds["distance_m"]);
+}
+
 #[test]
 fn a_tight_radius_stops_matching() {
     // The devices are several meters apart, so a one-meter radius matches none.

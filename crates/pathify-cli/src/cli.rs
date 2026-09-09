@@ -2,7 +2,15 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 use pathify_core::Format;
-use pathify_core::spatial::{DEFAULT_NOISE_THRESHOLD_M, MAX_PLAUSIBLE_SPEED_MPS};
+
+use crate::units::{parse_distance, parse_duration, parse_speed};
+
+/// Defaults as the command line spells them, unit and all, so `--help` shows
+/// a value you could have typed yourself. The tests below keep each one in
+/// step with the constant it stands for.
+const DEFAULT_ELEVATION_THRESHOLD: &str = "3m";
+const DEFAULT_MAX_SPEED: &str = "60m/s";
+const DEFAULT_SEGMENT_GAP: &str = "120s";
 
 /// A local-first toolkit for GPS trace data.
 #[derive(Debug, Parser)]
@@ -74,11 +82,16 @@ pub struct InfoArgs {
     #[arg(long, value_name = "FORMAT", value_parser = parse_format)]
     pub from: Option<Format>,
 
-    /// Ignore elevation changes smaller than this, in meters.
+    /// Ignore elevation changes smaller than this, e.g. `3m` or `10ft`.
     ///
     /// GPS elevation jitters by a couple of meters at rest; without a floor,
     /// a flat ride reports hundreds of meters of climb.
-    #[arg(long, value_name = "METERS", default_value_t = DEFAULT_NOISE_THRESHOLD_M)]
+    #[arg(
+        long,
+        value_name = "DISTANCE",
+        value_parser = parse_distance,
+        default_value = DEFAULT_ELEVATION_THRESHOLD
+    )]
     pub elevation_threshold: f64,
 }
 
@@ -148,16 +161,21 @@ pub struct MergeArgs {
     #[arg(long)]
     pub no_dedup: bool,
 
-    /// Override the matching time window, in seconds.
-    #[arg(long, value_name = "SECONDS")]
+    /// Override the matching time window, e.g. `15s` or `2min`.
+    #[arg(long, value_name = "DURATION", value_parser = parse_duration)]
     pub dedup_window: Option<f64>,
 
-    /// Override the matching distance, in meters.
-    #[arg(long, value_name = "METERS")]
+    /// Override the matching distance, e.g. `15m` or `50ft`.
+    #[arg(long, value_name = "DISTANCE", value_parser = parse_distance)]
     pub dedup_radius: Option<f64>,
 
-    /// Gap that starts a new segment in reconciled output, in seconds.
-    #[arg(long, value_name = "SECONDS", default_value_t = 120.0)]
+    /// Gap that starts a new segment in reconciled output, e.g. `120s`.
+    #[arg(
+        long,
+        value_name = "DURATION",
+        value_parser = parse_duration,
+        default_value = DEFAULT_SEGMENT_GAP
+    )]
     pub segment_gap: f64,
 
     /// Report what the merge did on stderr.
@@ -204,11 +222,20 @@ pub struct CleanArgs {
     #[arg(long)]
     pub no_drift_filter: bool,
 
-    /// Speed above which a step is treated as a bad fix, in meters per second.
-    #[arg(long, value_name = "M/S", default_value_t = MAX_PLAUSIBLE_SPEED_MPS)]
+    /// Speed above which a step is treated as a bad fix, e.g. `60m/s` or
+    /// `216km/h`.
+    #[arg(
+        long,
+        value_name = "SPEED",
+        value_parser = parse_speed,
+        default_value = DEFAULT_MAX_SPEED
+    )]
     pub max_speed: f64,
 
-    /// Remove everything within RADIUS meters of LAT,LON. Repeatable.
+    /// Remove everything within RADIUS of LAT,LON. Repeatable.
+    ///
+    /// The radius carries its own unit, e.g. `47.65,-122.31,300m` or
+    /// `47.65,-122.31,500ft`; a bare number is meters.
     // `allow_hyphen_values` because a southern-hemisphere latitude starts with
     // a minus sign, and without it clap reads the whole value as an unknown
     // flag — so the fence was unusable for half the planet, and
@@ -221,9 +248,9 @@ pub struct CleanArgs {
     )]
     pub redact_around: Vec<GeofenceArg>,
 
-    /// Remove everything within this many meters of where the trace starts and
-    /// ends, without having to name the location.
-    #[arg(long, value_name = "METERS")]
+    /// Remove everything within this distance of where the trace starts and
+    /// ends, without having to name the location, e.g. `300m` or `200ft`.
+    #[arg(long, value_name = "DISTANCE", value_parser = parse_distance)]
     pub trim_ends: Option<f64>,
 
     /// Report what was removed, on stderr.
@@ -252,10 +279,14 @@ fn parse_geofence(value: &str) -> Result<GeofenceArg, String> {
             .map_err(|_| format!("`{text}` is not a number for {name}"))
     };
 
+    // The radius is a distance like any other flag's, so it takes a unit:
+    // `47.65,-122.31,500ft`. `parse_distance` also rejects a negative radius,
+    // which would silently fence nothing and quietly publish the location the
+    // user asked to hide.
     let (lat, lon, radius_m) = (
         number(lat, "latitude")?,
         number(lon, "longitude")?,
-        number(radius, "radius")?,
+        parse_distance(radius)?,
     );
 
     if !(-90.0..=90.0).contains(&lat) {
@@ -263,11 +294,6 @@ fn parse_geofence(value: &str) -> Result<GeofenceArg, String> {
     }
     if !(-180.0..=180.0).contains(&lon) {
         return Err(format!("longitude {lon} is outside -180..=180"));
-    }
-    // A negative radius would silently fence nothing, quietly publishing the
-    // location the user asked to hide.
-    if radius_m < 0.0 || !radius_m.is_finite() {
-        return Err(format!("radius {radius_m} must be zero or more"));
     }
 
     Ok(GeofenceArg { lat, lon, radius_m })
@@ -298,6 +324,7 @@ fn parse_format(value: &str) -> Result<Format, String> {
 mod tests {
     use super::*;
     use clap::CommandFactory;
+    use pathify_core::spatial::{DEFAULT_NOISE_THRESHOLD_M, MAX_PLAUSIBLE_SPEED_MPS};
     use std::path::Path;
 
     fn info_args(argv: &[&str]) -> InfoArgs {
@@ -314,9 +341,118 @@ mod tests {
         }
     }
 
+    fn clean_args(argv: &[&str]) -> CleanArgs {
+        match Cli::try_parse_from(argv).unwrap().command {
+            Command::Clean(args) => args,
+            other => panic!("expected `clean`, parsed {other:?}"),
+        }
+    }
+
+    fn merge_args(argv: &[&str]) -> MergeArgs {
+        match Cli::try_parse_from(argv).unwrap().command {
+            Command::Merge(args) => args,
+            other => panic!("expected `merge`, parsed {other:?}"),
+        }
+    }
+
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    /// The defaults are spelled with their units for `--help`, so they have to
+    /// still mean the constants they stand for.
+    #[test]
+    fn the_spelled_defaults_match_the_constants() {
+        assert_eq!(
+            parse_distance(DEFAULT_ELEVATION_THRESHOLD).unwrap(),
+            DEFAULT_NOISE_THRESHOLD_M
+        );
+        assert_eq!(
+            parse_speed(DEFAULT_MAX_SPEED).unwrap(),
+            MAX_PLAUSIBLE_SPEED_MPS
+        );
+        assert_eq!(parse_duration(DEFAULT_SEGMENT_GAP).unwrap(), 120.0);
+
+        let defaults = info_args(&["pathify", "info"]);
+        assert_eq!(defaults.elevation_threshold, DEFAULT_NOISE_THRESHOLD_M);
+        assert_eq!(
+            clean_args(&["pathify", "clean"]).max_speed,
+            MAX_PLAUSIBLE_SPEED_MPS
+        );
+        assert_eq!(
+            merge_args(&["pathify", "merge", "a.gpx", "b.gpx"]).segment_gap,
+            120.0
+        );
+    }
+
+    /// Every measured flag takes its unit inline and hands the program the
+    /// metric base unit, whichever unit was typed.
+    #[test]
+    fn measured_flags_accept_their_units_inline() {
+        let info = info_args(&["pathify", "info", "r.gpx", "--elevation-threshold", "10ft"]);
+        assert!((info.elevation_threshold - 3.048).abs() < 1e-9);
+
+        let clean = clean_args(&[
+            "pathify",
+            "clean",
+            "r.gpx",
+            "--trim-ends",
+            "200ft",
+            "--max-speed",
+            "216km/h",
+        ]);
+        assert!((clean.trim_ends.unwrap() - 60.96).abs() < 1e-9);
+        assert!((clean.max_speed - 60.0).abs() < 1e-9);
+
+        let merge = merge_args(&[
+            "pathify",
+            "merge",
+            "a.gpx",
+            "b.gpx",
+            "--dedup-window",
+            "2min",
+            "--dedup-radius",
+            "50ft",
+            "--segment-gap",
+            "1h",
+        ]);
+        assert_eq!(merge.dedup_window, Some(120.0));
+        assert!((merge.dedup_radius.unwrap() - 15.24).abs() < 1e-9);
+        assert_eq!(merge.segment_gap, 3600.0);
+    }
+
+    /// A fence radius is a distance like any other, so it takes a unit too —
+    /// and the latitude keeps its minus sign either way.
+    #[test]
+    fn a_fence_radius_takes_a_unit() {
+        let args = clean_args(&[
+            "pathify",
+            "clean",
+            "r.gpx",
+            "--redact-around",
+            "-33.8688,151.2093,500ft",
+        ]);
+        assert_eq!(args.redact_around[0].lat, -33.8688);
+        assert!((args.redact_around[0].radius_m - 152.4).abs() < 1e-9);
+    }
+
+    /// A number with no unit keeps meaning the metric base unit, which is what
+    /// every existing script and README example relies on.
+    #[test]
+    fn a_bare_number_still_means_meters_or_seconds() {
+        let args = clean_args(&["pathify", "clean", "r.gpx", "--trim-ends", "300"]);
+        assert_eq!(args.trim_ends, Some(300.0));
+        let args = merge_args(&["pathify", "merge", "a.gpx", "b.gpx", "--dedup-window", "15"]);
+        assert_eq!(args.dedup_window, Some(15.0));
+    }
+
+    #[test]
+    fn a_unit_from_the_wrong_dimension_is_rejected() {
+        // A duration is not a distance, however sensible the unit looks.
+        assert!(Cli::try_parse_from(["pathify", "clean", "r.gpx", "--trim-ends", "5min"]).is_err());
+        // And a speed is not a bare distance-over-nothing.
+        assert!(Cli::try_parse_from(["pathify", "clean", "r.gpx", "--max-speed", "60ft"]).is_err());
     }
 
     /// A latitude south of the equator starts with a minus sign, which clap

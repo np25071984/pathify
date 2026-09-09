@@ -6,6 +6,21 @@ to CLI flags, output formats, or exit codes requires a major version bump.
 
 ## Unreleased
 
+### Added
+
+- Every numeric flag that measures something now takes its unit inline:
+  `--trim-ends 200ft`, `--elevation-threshold 3m`, `--max-speed 216km/h`,
+  `--dedup-window 2min`, and the radius of `--redact-around 47.65,-122.31,500ft`.
+  Distances accept `m`, `km`, `cm`, `ft`, `yd`, `mi`, and `nmi`; durations `s`,
+  `ms`, `min`, and `h`; speeds `m/s`, `km/h`, `mph`, `ft/s`, and `kn`. A bare
+  number still means the metric base unit each flag already counted in — meters,
+  seconds, or meters per second — so existing commands and scripts are
+  unaffected. A unit from the wrong kind is refused rather than guessed at, as
+  is a bare `m` on a duration, which reads as minutes to one person and meters
+  to another. `--help` now spells the defaults with their units (`3m`, `120s`,
+  `60m/s`), and a negative value is refused for every measure, not just a fence
+  radius.
+
 ### Fixed
 
 - `clean --redact-around` accepted no latitude south of the equator. A leading

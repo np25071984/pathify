@@ -180,6 +180,57 @@ fn a_malformed_fence_explains_the_expected_shape() {
         .stderr(predicate::str::contains("LAT,LON,RADIUS"));
 }
 
+/// A distance in feet has to reach the same points as the equivalent distance
+/// in meters — a unit that parses but does not convert would trim the wrong
+/// amount while looking like it worked.
+#[test]
+fn a_trim_in_feet_matches_the_same_trim_in_meters() {
+    let feet = info_of(clean_fixture("ride.gpx", &["--trim-ends", "1000ft"]));
+    let meters = info_of(clean_fixture("ride.gpx", &["--trim-ends", "304.8"]));
+
+    assert_eq!(feet["points"], meters["points"]);
+    assert_eq!(feet["distance_m"], meters["distance_m"]);
+    // And it actually trimmed something, or the comparison proves nothing.
+    let untouched = info_of(std::fs::read(fixture("ride.gpx")).unwrap());
+    assert_ne!(feet["points"], untouched["points"]);
+}
+
+/// The same for a fence radius, which is the one distance that is buried
+/// inside a larger value.
+#[test]
+fn a_fence_radius_in_feet_matches_the_same_radius_in_meters() {
+    let fence = |radius: &str| {
+        let mut argument = String::from("47.6535,-122.3056,");
+        argument.push_str(radius);
+        info_of(clean_fixture("ride.gpx", &["--redact-around", &argument]))
+    };
+    assert_eq!(fence("1000ft")["points"], fence("304.8")["points"]);
+}
+
+/// A speed flag in km/h has to mean the same thing as the m/s it converts to,
+/// including for the drift filter that runs by default.
+#[test]
+fn a_max_speed_in_kmh_matches_the_same_speed_in_mps() {
+    let kmh = info_of(clean_fixture("ride-drift.gpx", &["--max-speed", "36km/h"]));
+    let mps = info_of(clean_fixture("ride-drift.gpx", &["--max-speed", "10"]));
+
+    assert_eq!(kmh["points"], mps["points"]);
+}
+
+/// A unit belonging to another kind of measure is a typo, not a value to guess
+/// at, and the message has to name the units that would have worked.
+#[test]
+fn a_duration_unit_on_a_distance_is_refused() {
+    pathify()
+        .arg("clean")
+        .arg(fixture("ride.gpx"))
+        .args(["--trim-ends", "5min"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown distance unit"))
+        .stderr(predicate::str::contains("ft"));
+}
+
 /// A negative radius would fence nothing and quietly publish the location the
 /// user asked to hide, so it has to be refused rather than accepted.
 #[test]

@@ -7,6 +7,7 @@
 mod cli;
 mod commands;
 mod io;
+mod units;
 
 use std::io::Write;
 use std::process::ExitCode;
