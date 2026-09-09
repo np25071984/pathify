@@ -48,7 +48,7 @@ cargo install pathify-cli
 Or from source — requires Rust 1.88 or newer:
 
 ```sh
-git clone <repository-url> && cd pathify
+git clone https://github.com/np25071984/pathify.git && cd pathify
 cargo install --path crates/pathify-cli
 ```
 
@@ -88,6 +88,34 @@ piped in and it says so rather than sitting there waiting on a keyboard nobody
 is typing at — a forgotten filename is a mistake, not a request. To type a trace
 in by hand, ask for stdin explicitly with `-`.
 
+### Units
+
+Every flag that measures something takes its unit inline, so a command says
+what it means without you having to remember which flag counts in what:
+
+```sh
+pathify clean ride.gpx --trim-ends 200ft        # feet
+pathify clean ride.gpx --max-speed 216km/h      # km/h
+pathify info ride.gpx --elevation-threshold 3m  # meters
+pathify merge a.gpx b.gpx --dedup-window 2min   # minutes
+```
+
+A bare number means the metric base unit — meters for a distance, seconds for
+a duration, meters per second for a speed — which is what the flags have always
+counted in, so existing scripts keep working unchanged.
+
+| Kind | Units accepted | Bare number means |
+| --- | --- | --- |
+| `<DISTANCE>` | `m`, `km`, `cm`, `ft`, `yd`, `mi`, `nmi` | meters |
+| `<DURATION>` | `s`, `ms`, `min`, `h` | seconds |
+| `<SPEED>` | `m/s`, `km/h`, `mph`, `ft/s`, `kn` | meters per second |
+
+Spelling is forgiving about case, spacing, and the long forms — `200FT`,
+`200 ft`, and `200feet` are one value. Unit names are not interchangeable
+across kinds: `--trim-ends 5min` is refused rather than guessed at, and on a
+duration a bare `m` is refused as ambiguous, since it reads as minutes to one
+person and meters to another.
+
 ### Exit codes
 
 | Code | Meaning |
@@ -102,7 +130,7 @@ in by hand, ask for stdin explicitly with `-`.
 | --- | --- |
 | `--json` | Emit JSON instead of the human-readable table |
 | `--from <FORMAT>` | Override format detection (`gpx`, `tcx`, `fit`, `kml`, `geojson`, `csv`) |
-| `--elevation-threshold <METERS>` | Ignore elevation changes below this floor (default `3`) |
+| `--elevation-threshold <DISTANCE>` | Ignore elevation changes below this floor (default `3m`) |
 
 The elevation threshold is not cosmetic. Consumer GPS elevation jitters by a
 couple of meters at rest, so summing raw deltas reports hundreds of meters of
@@ -144,9 +172,9 @@ pathify merge monday.gpx tuesday.gpx --to geojson # two days, stitched in order
 | --- | --- |
 | `--primary <FILE>` | Input whose position, elevation, and time win on conflict (default: the first) |
 | `--no-dedup` | Concatenate without matching, even where inputs overlap |
-| `--dedup-window <SECONDS>` | Override the derived matching window |
-| `--dedup-radius <METERS>` | Override the speed-derived matching distance |
-| `--segment-gap <SECONDS>` | Gap that starts a new segment in reconciled output (default `120`) |
+| `--dedup-window <DURATION>` | Override the derived matching window |
+| `--dedup-radius <DISTANCE>` | Override the speed-derived matching distance |
+| `--segment-gap <DURATION>` | Gap that starts a new segment in reconciled output (default `120s`) |
 | `--verbose, -v` | Report what the merge did, on stderr |
 | `--to`, `--from`, `--output` | As for `convert`; output defaults to the first input's format |
 
@@ -197,16 +225,17 @@ about where the pauses were and their own boundaries cannot both be kept.
 
 ```sh
 pathify clean ride.gpx > tidy.gpx                          # drift filtering only
-pathify clean ride.gpx --trim-ends 300 > shareable.gpx     # hide both endpoints
-pathify clean ride.gpx --redact-around 47.6535,-122.3056,300
+pathify clean ride.gpx --trim-ends 300m > shareable.gpx    # hide both endpoints
+pathify clean ride.gpx --trim-ends 1000ft > shareable.gpx  # same, in feet
+pathify clean ride.gpx --redact-around 47.6535,-122.3056,300m
 ```
 
 | Flag | Effect |
 | --- | --- |
-| `--trim-ends <METERS>` | Remove everything near where the trace starts and ends |
+| `--trim-ends <DISTANCE>` | Remove everything near where the trace starts and ends |
 | `--redact-around <LAT,LON,RADIUS>` | Remove everything inside a named circle. Repeatable |
 | `--no-drift-filter` | Keep fixes that imply an impossible speed |
-| `--max-speed <M/S>` | Speed above which a step is a bad fix (default `60`, about 216 km/h) |
+| `--max-speed <SPEED>` | Speed above which a step is a bad fix (default `60m/s`, about 216 km/h) |
 | `--verbose, -v` | Report what was removed, on stderr |
 | `--to`, `--from`, `--output` | As for `convert`; output defaults to the input's format |
 
@@ -231,7 +260,7 @@ the bad one, so a single bad first fix cannot cascade into an empty file.
 ones is yours to decide — there is no default radius quietly cutting your ride.
 Two ways to ask:
 
-- `--trim-ends <METERS>` hides where a journey began and finished without you
+- `--trim-ends <DISTANCE>` hides where a journey began and finished without you
   typing your home address into a shell command. It fences *both* endpoints and
   removes matching points wherever they appear, so a loop that passes the front
   door halfway round does not leak what the trim was meant to hide.
