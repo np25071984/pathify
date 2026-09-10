@@ -40,6 +40,15 @@ to CLI flags, output formats, or exit codes requires a major version bump.
 - `Units` moved from `pathify-tui` to `pathify-core`, so `render` can read the
   locale for `--reveal` without depending on the terminal crate. Still
   re-exported from `pathify-tui`.
+- `render --fog` no longer slows down as the corridor widens. It was flooding
+  outward from every point in turn, so the cost went with the points times the
+  square of the reveal radius while the image it was drawing on stayed the same
+  size: a lifetime-scale trace of 168,000 points on a 4000×3000 basemap took
+  5.5 s at a 100 m reveal, 29 s at 250 m, and seven minutes at 1 km, doing the
+  same pixels over and over. The corridor is now measured once and swept across
+  the image, which takes about 0.8 s at every one of those radii. Narrow
+  corridors, where flooding is exact and cheap, still flood — output below the
+  switch is byte-identical, and above it the two agree to well under a pixel.
 
 ## 1.2.0
 

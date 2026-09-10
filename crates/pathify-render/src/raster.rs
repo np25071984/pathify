@@ -74,13 +74,57 @@ impl Mask {
         let feather = feather.max(f64::EPSILON);
         let reach = inner + feather;
 
-        walk_capsule_pixels(self.width, self.height, a, b, reach, |x, y, distance| {
+        walk_capsule_pixels(self.width, self.height, a, b, reach, |x, y, distance, _| {
             let coverage = (((reach - distance) / feather) as f32).clamp(0.0, 1.0);
             let slot = &mut self.values[(y as usize) * (self.width as usize) + (x as usize)];
             // Maximum rather than sum: overlapping strokes should not stack
             // into a darker patch where a route crosses itself.
             *slot = slot.max(coverage);
         });
+    }
+
+    /// The same shape [`Mask::add_polyline`] would build for every segment at
+    /// once, at a cost that follows the canvas rather than the radius.
+    ///
+    /// `add_polyline` walks a box of side `2 * reach` for each pair of points,
+    /// which is the right thing for a stroke a few pixels wide and quite wrong
+    /// for a fog corridor hundreds of pixels wide: consecutive GPS fixes land
+    /// about a pixel apart, so every pixel in the corridor is recomputed once
+    /// per nearby fix. A 168,000-point trace on a 12-megapixel canvas at a
+    /// 75 px reveal costs some four billion pixel visits, and half a minute.
+    ///
+    /// Here the route is measured exactly into a narrow band and then carried
+    /// across the image by [`Nearest`], which touches each pixel a fixed
+    /// number of times whatever the radius.
+    pub fn within_distance_of(
+        width: u32,
+        height: u32,
+        segments: &[Vec<(f64, f64)>],
+        inner: f64,
+        feather: f64,
+    ) -> Self {
+        let mut mask = Self::new(width, height);
+        if width == 0 || height == 0 {
+            return mask;
+        }
+
+        let feather = feather.max(f64::EPSILON);
+        let reach = inner + feather;
+
+        let nearest = Nearest::to(
+            width,
+            height,
+            margin(width, height, segments, reach),
+            segments,
+        );
+        for y in 0..(height as usize) {
+            for x in 0..(width as usize) {
+                let coverage =
+                    (((reach - nearest.distance(x, y)) / feather) as f32).clamp(0.0, 1.0);
+                mask.values[y * (width as usize) + x] = coverage;
+            }
+        }
+        mask
     }
 }
 
@@ -257,7 +301,7 @@ fn walk_capsule_pixels(
     a: (f64, f64),
     b: (f64, f64),
     reach: f64,
-    mut visit: impl FnMut(u32, u32, f64),
+    mut visit: impl FnMut(u32, u32, f64, (f64, f64)),
 ) {
     if !a.0.is_finite() || !a.1.is_finite() || !b.0.is_finite() || !b.1.is_finite() {
         return;
@@ -288,19 +332,20 @@ fn walk_capsule_pixels(
             for x in min_x..=(max_x as u32) {
                 // Pixel centres, not corners, or the stroke sits half a pixel
                 // up and to the left of where it belongs.
-                let distance =
-                    distance_to_segment(f64::from(x) + 0.5, f64::from(y) + 0.5, from, to);
+                let (px, py) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+                let nearest = nearest_on_segment(px, py, from, to);
+                let distance = ((px - nearest.0).powi(2) + (py - nearest.1).powi(2)).sqrt();
                 if distance <= reach {
-                    visit(x, y, distance);
+                    visit(x, y, distance, nearest);
                 }
             }
         }
     }
 }
 
-/// Shortest distance from a point to a line segment. Handles a zero-length
+/// The point on a line segment nearest to `(px, py)`. Handles a zero-length
 /// segment, which is how a single-point trace is drawn.
-fn distance_to_segment(px: f64, py: f64, a: (f64, f64), b: (f64, f64)) -> f64 {
+fn nearest_on_segment(px: f64, py: f64, a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
     let (dx, dy) = (b.0 - a.0, b.1 - a.1);
     let length_squared = dx * dx + dy * dy;
     let t = if length_squared > 0.0 {
@@ -308,13 +353,208 @@ fn distance_to_segment(px: f64, py: f64, a: (f64, f64), b: (f64, f64)) -> f64 {
     } else {
         0.0
     };
-    let (nx, ny) = (a.0 + dx * t, a.1 + dy * t);
-    ((px - nx).powi(2) + (py - ny).powi(2)).sqrt()
+    (a.0 + dx * t, a.1 + dy * t)
+}
+
+/// How far the sweep's grid has to extend past the image.
+///
+/// Two things bound it, and the smaller wins. A route can only lift fog within
+/// `reach` of itself, so nothing further out than that can matter. And the
+/// grid is only useful where it can hold seeds, so it never has to reach past
+/// the route itself — which is the usual case by a wide margin, since the
+/// basemap is normally fetched for the very box the trace occupies, and then
+/// the answer is a pixel or two.
+fn margin(width: u32, height: u32, segments: &[Vec<(f64, f64)>], reach: f64) -> usize {
+    let mut overhang: f64 = 0.0;
+    for point in segments.iter().flatten() {
+        if !point.0.is_finite() || !point.1.is_finite() {
+            continue;
+        }
+        overhang = overhang
+            .max(-point.0)
+            .max(-point.1)
+            .max(point.0 - f64::from(width))
+            .max(point.1 - f64::from(height));
+    }
+
+    // The seed band itself sits a pixel and a half outside the outermost
+    // point, so the grid has to hold that too.
+    let needed = (overhang + SEED_BAND_PX).min(reach);
+    needed.ceil().max(0.0) as usize
+}
+
+/// How far either side of the route the exact distances are measured before
+/// the sweep takes over. A pixel centre can sit up to `sqrt(2) / 2` from a
+/// line without any nearer one existing — a 45-degree diagonal does exactly
+/// that — so a narrower band would leave a whole segment unseeded.
+const SEED_BAND_PX: f64 = 1.5;
+
+/// A pixel that has not found the route yet. Large enough to lose every
+/// comparison, small enough that squaring it stays nowhere near overflow.
+const UNREACHED_PX: f32 = 1.0e9;
+
+/// For every pixel, the offset from its centre to the nearest point on the
+/// route, in pixels.
+///
+/// An offset rather than a distance, which is what keeps this accurate. A
+/// scalar transform can only propagate "how far", so it lets a faraway pixel
+/// reach the route diagonally through a band pixel and come out short by about
+/// the width of the band. Carrying the vector means each pixel ends up
+/// measuring to the actual point on the line, wherever that is between the
+/// pixel centres.
+struct Nearest {
+    offsets: Vec<[f32; 2]>,
+    width: usize,
+    height: usize,
+    /// How far the grid extends past the image on every side, so that a route
+    /// running just off the edge still reveals the ground inside it.
+    margin: usize,
+}
+
+impl Nearest {
+    /// Measure to `segments`, exactly near the line and by propagation
+    /// everywhere else.
+    ///
+    /// Danielsson's sweep: one pass down and to the right, one back up and to
+    /// the left, each pixel taking the best offset its already-visited
+    /// neighbours found. Two passes over the grid, whatever the distances
+    /// involved.
+    ///
+    /// The grid is the image grown by `margin` on each side. A route that
+    /// misses the image can still be near enough to matter, and it can only be
+    /// seeded where it actually runs, so the room it needs has to exist —
+    /// `reach` is exactly how far its influence carries, and nothing beyond
+    /// that has to be represented.
+    fn to(width: u32, height: u32, margin: usize, segments: &[Vec<(f64, f64)>]) -> Self {
+        let (w, h) = (width as usize + 2 * margin, height as usize + 2 * margin);
+        let mut field = Self {
+            offsets: vec![[UNREACHED_PX, UNREACHED_PX]; w * h],
+            width: w,
+            height: h,
+            margin,
+        };
+        field.seed(segments);
+        field.sweep();
+        field
+    }
+
+    /// Write the exact offset into the pixels lying within [`SEED_BAND_PX`] of
+    /// the route.
+    ///
+    /// Segments are walked separately and never joined, for the reason
+    /// [`Mask::add_polyline`] gives: a break is a pause or a dropout, and a
+    /// corridor across it reveals ground nobody covered. Reusing the same
+    /// traversal also inherits its clipping, so a segment whose ends are both
+    /// off-frame still seeds the part that crosses the image.
+    fn seed(&mut self, segments: &[Vec<(f64, f64)>]) {
+        let (stride, offsets) = (self.width, &mut self.offsets);
+        let mut seed = |x: u32, y: u32, _distance: f64, nearest: (f64, f64)| {
+            let candidate = [
+                (nearest.0 - (f64::from(x) + 0.5)) as f32,
+                (nearest.1 - (f64::from(y) + 0.5)) as f32,
+            ];
+            let slot = &mut offsets[(y as usize) * stride + (x as usize)];
+            if length_squared(candidate) < length_squared(*slot) {
+                *slot = candidate;
+            }
+        };
+
+        let (width, height) = (self.width as u32, self.height as u32);
+        // Everything is walked in grid coordinates, which are image
+        // coordinates shifted by the margin.
+        let shift = self.margin as f64;
+        let onto_grid = |point: (f64, f64)| (point.0 + shift, point.1 + shift);
+
+        for points in segments {
+            match points.as_slice() {
+                [] => {}
+                [only] => {
+                    let only = onto_grid(*only);
+                    walk_capsule_pixels(width, height, only, only, SEED_BAND_PX, &mut seed);
+                }
+                _ => {
+                    for pair in points.windows(2) {
+                        walk_capsule_pixels(
+                            width,
+                            height,
+                            onto_grid(pair[0]),
+                            onto_grid(pair[1]),
+                            SEED_BAND_PX,
+                            &mut seed,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    fn sweep(&mut self) {
+        for y in 0..self.height {
+            for x in 0..self.width {
+                self.relax(x, y, -1, 0);
+                self.relax(x, y, 0, -1);
+                self.relax(x, y, -1, -1);
+                self.relax(x, y, 1, -1);
+            }
+            // Rightwards along the row just settled, so a pixel can also learn
+            // from the one to its right within the same pass.
+            for x in (0..self.width).rev() {
+                self.relax(x, y, 1, 0);
+            }
+        }
+
+        for y in (0..self.height).rev() {
+            for x in (0..self.width).rev() {
+                self.relax(x, y, 1, 0);
+                self.relax(x, y, 0, 1);
+                self.relax(x, y, 1, 1);
+                self.relax(x, y, -1, 1);
+            }
+            for x in 0..self.width {
+                self.relax(x, y, -1, 0);
+            }
+        }
+    }
+
+    /// Take the neighbour `(dx, dy)` away's answer if it beats this pixel's.
+    #[inline]
+    fn relax(&mut self, x: usize, y: usize, dx: isize, dy: isize) {
+        let (nx, ny) = (x as isize + dx, y as isize + dy);
+        if nx < 0 || ny < 0 || nx >= self.width as isize || ny >= self.height as isize {
+            return;
+        }
+
+        let source = self.offsets[(ny as usize) * self.width + (nx as usize)];
+        // The neighbour's point on the route, measured from here instead.
+        let candidate = [source[0] + dx as f32, source[1] + dy as f32];
+        let slot = &mut self.offsets[y * self.width + x];
+        if length_squared(candidate) < length_squared(*slot) {
+            *slot = candidate;
+        }
+    }
+
+    /// The distance from the centre of image pixel `(x, y)` to the route.
+    fn distance(&self, x: usize, y: usize) -> f64 {
+        let index = (y + self.margin) * self.width + (x + self.margin);
+        length_squared(self.offsets[index]).sqrt()
+    }
+}
+
+/// In `f64` because the components reach a few thousand pixels, and squaring
+/// those in `f32` starts losing whole units.
+fn length_squared(offset: [f32; 2]) -> f64 {
+    let (dx, dy) = (f64::from(offset[0]), f64::from(offset[1]));
+    dx * dx + dy * dy
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn distance_to_segment(px: f64, py: f64, a: (f64, f64), b: (f64, f64)) -> f64 {
+        let (nx, ny) = nearest_on_segment(px, py, a, b);
+        ((px - nx).powi(2) + (py - ny).powi(2)).sqrt()
+    }
 
     #[test]
     fn distance_to_a_segment_uses_the_nearest_point_on_it() {
@@ -384,6 +624,91 @@ mod tests {
         let (inner, feather) = stroke_shape(3.0);
         mask.add_polyline(&[(500.0, 500.0), (600.0, 600.0)], inner, feather);
         assert!(mask.is_blank());
+    }
+
+    /// The corridor the sweep draws has to be the corridor the flood draws,
+    /// or the same map renders differently depending on how wide the reveal
+    /// happens to be. `worst` is the largest coverage difference anywhere.
+    fn corridor_disagreement(
+        width: u32,
+        height: u32,
+        segments: &[Vec<(f64, f64)>],
+        inner: f64,
+        feather: f64,
+    ) -> f32 {
+        let mut flooded = Mask::new(width, height);
+        for points in segments {
+            flooded.add_polyline(points, inner, feather);
+        }
+        let swept = Mask::within_distance_of(width, height, segments, inner, feather);
+
+        let mut worst = 0.0f32;
+        for y in 0..height {
+            for x in 0..width {
+                worst = worst.max((flooded.get(x, y) - swept.get(x, y)).abs());
+            }
+        }
+        worst
+    }
+
+    #[test]
+    fn the_swept_corridor_matches_the_flooded_one() {
+        let segments = vec![
+            vec![(10.0, 12.0), (100.0, 30.0), (60.0, 80.0), (12.0, 44.0)],
+            vec![(20.0, 70.0), (35.0, 85.5)],
+            vec![(95.5, 5.5)],
+        ];
+        let worst = corridor_disagreement(120, 90, &segments, 18.0, 4.5);
+        assert!(
+            worst < 0.01,
+            "the two ways of drawing the corridor disagree by {worst}"
+        );
+    }
+
+    /// A route can miss the image and still be close enough to lift the fog
+    /// along the edge. The flood gets that right because it measures to the
+    /// real line; the sweep only gets it right because its grid extends past
+    /// the image far enough to hold the seeds.
+    #[test]
+    fn a_route_just_off_the_edge_still_clears_the_fog_inside_it() {
+        let segments = vec![vec![(-8.0, 0.0), (-8.0, 60.0)]];
+        let swept = Mask::within_distance_of(64, 64, &segments, 20.0, 5.0);
+
+        assert!(
+            swept.get(0, 30) > 0.9,
+            "the near edge is eight pixels from a route that reveals twenty"
+        );
+        assert_eq!(
+            swept.get(40, 30),
+            0.0,
+            "and the far side of the image is well out of its reach"
+        );
+
+        let worst = corridor_disagreement(64, 64, &segments, 20.0, 5.0);
+        assert!(worst < 0.01, "off-frame corridors disagree by {worst}");
+    }
+
+    /// A 45-degree line is the worst case for seeding: no pixel centre is
+    /// nearer than `sqrt(2) / 2` to it, so a band any narrower than that would
+    /// miss the whole segment and leave the map fogged over.
+    #[test]
+    fn a_diagonal_route_is_not_missed_by_the_seeding() {
+        let segments = vec![vec![(0.0, 0.5), (63.0, 63.5)]];
+        let swept = Mask::within_distance_of(64, 64, &segments, 6.0, 1.5);
+        for i in 8..56 {
+            assert!(
+                swept.get(i, i) > 0.99,
+                "the diagonal corridor has a hole at pixel {i}: {}",
+                swept.get(i, i)
+            );
+        }
+    }
+
+    #[test]
+    fn a_route_far_off_frame_sweeps_to_a_blank_corridor() {
+        let segments = vec![vec![(500.0, 500.0), (600.0, 600.0)]];
+        let swept = Mask::within_distance_of(32, 32, &segments, 20.0, 5.0);
+        assert!(swept.is_blank());
     }
 
     /// Overlaps take the maximum. Summing them would leave a darker smudge
