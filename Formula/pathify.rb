@@ -1,8 +1,8 @@
 class Pathify < Formula
   desc "Local-first CLI and TUI for GPS trace data"
   homepage "https://github.com/np25071984/pathify"
-  url "https://github.com/np25071984/pathify/archive/refs/tags/v1.2.0.tar.gz"
-  sha256 "94a378111239efdd198ae32825fc4e8af0324a108a2b8bb2a7c22b9fdc383ec6"
+  url "https://github.com/np25071984/pathify/archive/refs/tags/v1.3.0.tar.gz"
+  sha256 "389261eab3879d2c08273f697b79724a4fbf9d318f4817f42864125d0d500feb"
   license "MIT"
   head "https://github.com/np25071984/pathify.git", branch: "main"
 
