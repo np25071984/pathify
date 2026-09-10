@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "1.2.0"
+version = "1.3.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
@@ -13,6 +13,6 @@ homepage = "https://github.com/np25071984/pathify"
 readme = "README.md"
 
 [workspace.dependencies]
-pathify-core = { path = "crates/pathify-core", version = "1.2.0" }
-pathify-render = { path = "crates/pathify-render", version = "1.2.0" }
-pathify-tui = { path = "crates/pathify-tui", version = "1.2.0" }
+pathify-core = { path = "crates/pathify-core", version = "1.3.0" }
+pathify-render = { path = "crates/pathify-render", version = "1.3.0" }
+pathify-tui = { path = "crates/pathify-tui", version = "1.3.0" }
