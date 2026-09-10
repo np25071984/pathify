@@ -48,6 +48,18 @@ const ENDPOINT_RADIUS_FACTOR: f64 = 1.6;
 /// ramp the corridor looks like a cut-out rather than clearing weather.
 const REVEAL_FEATHER_FRACTION: f64 = 0.25;
 
+/// The reveal radius, in pixels, at which the fog corridor stops being flooded
+/// outward from the route and starts being swept across the image instead.
+///
+/// Not an accuracy threshold — the two agree to well under a pixel — but a
+/// cost one, and the two costs are shaped differently. Flooding is
+/// proportional to the points times the square of the radius, so it is the
+/// cheaper of the two for a narrow corridor and quickly the more expensive for
+/// a wide one; sweeping is proportional to the image and does not care about
+/// the radius at all. A dozen pixels is around where a dense trace tips the
+/// balance, and being off by a little either way costs a fraction of a second.
+const SWEEP_MIN_REVEAL_PX: f64 = 12.0;
+
 #[derive(Debug)]
 pub enum Error {
     Decode(png::DecodingError),
@@ -242,10 +254,21 @@ fn draw_fog(
     opacity: f64,
 ) -> Result<()> {
     let feather = (reveal_px * REVEAL_FEATHER_FRACTION).max(1.0);
-    let mut revealed = raster::Mask::new(canvas.width(), canvas.height());
-    for points in segments {
-        revealed.add_polyline(points, reveal_px, feather);
-    }
+    let revealed = if reveal_px >= SWEEP_MIN_REVEAL_PX {
+        raster::Mask::within_distance_of(
+            canvas.width(),
+            canvas.height(),
+            segments,
+            reveal_px,
+            feather,
+        )
+    } else {
+        let mut mask = raster::Mask::new(canvas.width(), canvas.height());
+        for points in segments {
+            mask.add_polyline(points, reveal_px, feather);
+        }
+        mask
+    };
     if revealed.is_blank() {
         return Err(Error::TraceOutsideBasemap);
     }
