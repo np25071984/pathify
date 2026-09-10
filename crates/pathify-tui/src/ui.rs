@@ -10,7 +10,7 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use super::app::App;
 use super::input::{HELP, HINTS, HINTS_SHORT};
-use super::units::Units;
+use pathify_core::Units;
 
 const TRACK_COLOR: Color = Color::Cyan;
 const START_COLOR: Color = Color::Green;

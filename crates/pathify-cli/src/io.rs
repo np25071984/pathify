@@ -81,6 +81,98 @@ pub fn read_input(input: Option<&Path>) -> Result<(Vec<u8>, Option<PathBuf>)> {
     }
 }
 
+/// Read a trace and a basemap, either of which may be the piped input.
+///
+/// Which one arrived on stdin is decided by its content rather than by
+/// position: a PNG signature is a basemap, anything else is a trace. That is
+/// what lets both of these mean what they look like —
+///
+/// ```text
+/// cat map.png | pathify render ride.gpx
+/// cat ride.gpx | pathify render --basemap map.png
+/// ```
+///
+/// — without the second one quietly trying to decode a GPX file as an image.
+/// Stdin is read at most once, and only when one of the two is missing.
+pub fn read_render_inputs(
+    trace: Option<&Path>,
+    basemap: Option<&Path>,
+) -> Result<(Vec<u8>, Option<PathBuf>, Vec<u8>)> {
+    let trace_is_stdin = trace.is_some_and(is_stdin);
+    let basemap_is_stdin = basemap.is_some_and(is_stdin);
+
+    if trace_is_stdin && basemap_is_stdin {
+        bail!(
+            "the trace and the basemap cannot both come from stdin.\n\
+             Name one of them as a file."
+        );
+    }
+
+    // An explicit `-` on either side settles which is which, so there is
+    // nothing to sniff.
+    if trace_is_stdin {
+        let (basemap_bytes, _) = read_input(Some(require_basemap(basemap)?))?;
+        let (trace_bytes, _) = read_input(trace)?;
+        return Ok((trace_bytes, None, basemap_bytes));
+    }
+    if basemap_is_stdin {
+        let (trace_bytes, path) = read_input(Some(require_trace(trace)?))?;
+        let (basemap_bytes, _) = read_input(basemap)?;
+        return Ok((trace_bytes, path, basemap_bytes));
+    }
+
+    if let (Some(trace), Some(basemap)) = (trace, basemap) {
+        let (trace_bytes, path) = read_input(Some(trace))?;
+        let (basemap_bytes, _) = read_input(Some(basemap))?;
+        return Ok((trace_bytes, path, basemap_bytes));
+    }
+
+    // One of the two is missing, so it has to be the piped input. `read_input`
+    // with no path applies the usual rules, including refusing to sit and wait
+    // at a terminal for a filename someone forgot.
+    let (piped, _) = read_input(None)?;
+
+    if pathify_render::is_png(&piped) {
+        if basemap.is_some() {
+            bail!(
+                "the basemap was given twice: a PNG was piped in, and --basemap \
+                 names another one.\nPipe the trace instead, or drop --basemap."
+            );
+        }
+        let (trace_bytes, path) = read_input(Some(require_trace(trace)?))?;
+        Ok((trace_bytes, path, piped))
+    } else {
+        // Not a PNG, so the pipe is the trace — unless no basemap was named
+        // either, in which case the missing basemap is the real problem and
+        // saying anything else sends the reader looking in the wrong place.
+        let basemap = require_basemap(basemap)?;
+        let (basemap_bytes, _) = read_input(Some(basemap))?;
+        Ok((piped, None, basemap_bytes))
+    }
+}
+
+/// The basemap is the one input Pathify cannot produce for itself, so the
+/// error says where to get one rather than just naming the missing flag.
+fn require_basemap(basemap: Option<&Path>) -> Result<&Path> {
+    basemap.ok_or_else(|| {
+        anyhow::anyhow!(
+            "no basemap: `render` draws onto a map image, and Pathify does not \
+             download one.\n\
+             Take the area from `pathify info`'s bbox row, fetch a PNG of it \
+             yourself, then pass it with --basemap FILE or pipe it in."
+        )
+    })
+}
+
+fn require_trace(trace: Option<&Path>) -> Result<&Path> {
+    trace.ok_or_else(|| {
+        anyhow::anyhow!(
+            "no trace: name a trace file, or pipe one in.\n\
+             For example `pathify render ride.gpx --basemap map.png`."
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

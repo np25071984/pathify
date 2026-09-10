@@ -27,6 +27,7 @@ pub mod merge;
 pub mod model;
 pub mod spatial;
 pub mod summary;
+pub mod units;
 
 pub use clean::{CleanOptions, CleanReport, clean};
 pub use error::{Error, Result};
@@ -34,3 +35,4 @@ pub use formats::Format;
 pub use merge::{MergeMode, MergeOptions, MergeReport, merge};
 pub use model::{Bounds, Extras, Metadata, Point, Segment, Trace, Track};
 pub use summary::Summary;
+pub use units::Units;

@@ -9,8 +9,8 @@ use pathify_core::{Point, Summary};
 
 use super::input::Action;
 use super::projection::Drawing;
-use super::units::Units;
 use super::viewport::{PAN_STEP, Viewport, ZOOM_STEP, cell_aspect};
+use pathify_core::Units;
 
 /// Whether the event loop should keep going.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

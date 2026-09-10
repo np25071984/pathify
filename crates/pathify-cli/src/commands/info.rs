@@ -1,8 +1,10 @@
 use std::io::Write;
 
 use anyhow::{Context, Result};
+use pathify_core::Bounds;
 use pathify_core::formats;
 use pathify_core::summary::Summary;
+use serde::Serialize;
 
 use crate::cli::InfoArgs;
 use crate::io::read_input;
@@ -14,12 +16,29 @@ pub fn run(args: &InfoArgs, out: &mut dyn Write) -> Result<()> {
     let summary = Summary::of(&trace, args.elevation_threshold);
 
     if args.json {
-        serde_json::to_writer_pretty(&mut *out, &summary).context("failed to write JSON")?;
+        let json = InfoJson {
+            bbox: summary.bounds.as_ref().map(Bounds::bbox),
+            summary: &summary,
+        };
+        serde_json::to_writer_pretty(&mut *out, &json).context("failed to write JSON")?;
         writeln!(out)?;
     } else {
         write_table(&summary, out)?;
     }
     Ok(())
+}
+
+/// `Summary` plus the derived bounding box.
+///
+/// The bbox is not model state — it is `bounds` in a different order — so it
+/// stays out of core's struct and is assembled here, at the edge that reports
+/// it.
+#[derive(Serialize)]
+struct InfoJson<'a> {
+    #[serde(flatten)]
+    summary: &'a Summary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bbox: Option<[f64; 4]>,
 }
 
 fn write_table(summary: &Summary, out: &mut dyn Write) -> Result<()> {
@@ -72,6 +91,15 @@ fn write_table(summary: &Summary, out: &mut dyn Write) -> Result<()> {
                 "{:.4}, {:.4} → {:.4}, {:.4}",
                 bounds.min_lat, bounds.min_lon, bounds.max_lat, bounds.max_lon
             ),
+        )?;
+        // Six decimal places, where the line above makes do with four. Four is
+        // plenty to read, but it is around 11 m of error, and this row exists
+        // to be pasted into a map download — 11 m of offset between the basemap
+        // and the trace drawn on it is visible at close zoom.
+        let [min_lon, min_lat, max_lon, max_lat] = bounds.bbox();
+        row(
+            "bbox",
+            format!("{min_lon:.6},{min_lat:.6},{max_lon:.6},{max_lat:.6}"),
         )?;
     }
     Ok(())

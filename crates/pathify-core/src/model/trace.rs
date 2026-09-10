@@ -41,6 +41,19 @@ pub struct Bounds {
     pub max_lon: f64,
 }
 
+impl Bounds {
+    /// The box as `[min_lon, min_lat, max_lon, max_lat]`.
+    ///
+    /// That is the order GeoJSON and every map export endpoint use, and
+    /// deliberately not the `lat, lon` order the human-readable line reports:
+    /// pasting those four numbers into a `bbox=` parameter transposes the
+    /// world, and the resulting map looks plausible while being nowhere near
+    /// the trace.
+    pub fn bbox(&self) -> [f64; 4] {
+        [self.min_lon, self.min_lat, self.max_lon, self.max_lat]
+    }
+}
+
 impl Trace {
     pub fn new(metadata: Metadata, tracks: Vec<Track>) -> Self {
         Self { metadata, tracks }
