@@ -1,12 +1,12 @@
 # Pathify
 
 A local-first command-line toolkit for GPS trace data — inspect, clean, merge,
-convert, view, and render GPX, TCX, FIT, KML, GeoJSON, and CSV traces without a desktop
+convert, view, and render GPX, TCX, GeoJSON, and CSV traces without a desktop
 GIS application and without uploading anything anywhere.
 
-> **Status: 1.2.** `info`, `convert`, `merge`, `clean`, and `view` are stable
+> **Status: 1.3.** `info`, `convert`, `merge`, `clean`, and `view` are stable
 > across GPX, TCX, GeoJSON, and CSV — flags, output formats, and exit codes
-> won't break without a major version bump. `render` is new in 1.2 and its
+> won't break without a major version bump. `render` is new in 1.3 and its
 > flags may still settle. KML and FIT adapters are still planned — see
 > [Roadmap](#roadmap).
 
