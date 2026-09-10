@@ -4,7 +4,7 @@ All notable changes to Pathify are documented here. This project follows
 [Semantic Versioning](https://semver.org/): once released, a breaking change
 to CLI flags, output formats, or exit codes requires a major version bump.
 
-## Unreleased
+## 1.3.0
 
 ### Added
 
