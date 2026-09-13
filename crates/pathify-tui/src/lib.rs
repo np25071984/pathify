@@ -12,6 +12,7 @@
 pub mod app;
 pub mod input;
 pub mod projection;
+pub mod select;
 pub mod ui;
 pub mod viewport;
 
@@ -23,6 +24,7 @@ use pathify_core::Trace;
 pub use app::{App, Flow};
 pub use input::Action;
 pub use projection::{Drawing, Projection};
+pub use select::{Choice, choose};
 // Re-exported rather than owned: units are a locale question, not a terminal
 // one, and `render` needs them too without depending on this crate.
 pub use pathify_core::Units;

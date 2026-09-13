@@ -26,14 +26,23 @@ changed; an absent dependency cannot.
 - `pathify-cli` — argument parsing, input/output plumbing, and turning errors
   into messages and exit codes. Keep it thin; logic that could be unit-tested
   belongs in core.
-- `pathify-tui` — the interactive map. Nothing else may depend on it except the
-  `view` command.
+- `pathify-tui` — the interactive map, and the multi-select menu `takeout` asks
+  with. Only `view` and `takeout` may depend on it. If another command needs to
+  ask the user something, add a widget here rather than a second terminal
+  stack.
 - `pathify-render` — Web Mercator projection and PNG compositing. Depends on
   core and `png` and nothing else; nothing may depend on it except the `render`
   command. Note that this is a *second* projection, deliberately: the terminal
   map projects equirectangularly, which is right for a picture of a trace on
   its own, and wrong over a downloaded map, which is Mercator. Drawing one with
   the other shears the track away from the roads it followed.
+
+Reading a Google Takeout archive lives in `pathify-core/src/takeout/`, not in
+the command: locating, filtering, joining and segmenting are logic, and only
+the menu and the stderr reporting need a person. Each backend is its own module
+(`fitbit.rs` today, `timeline.rs` when Location History lands) behind
+`Archive::backend`, which detects what an export holds rather than assuming —
+an implementation written against one finds literally nothing in the other.
 
 ## Conventions that carry meaning
 
@@ -52,6 +61,13 @@ look plausible and are wrong:
 - **Reads widen, writes narrow.** Every adapter reads into the full model; the
   write path decides what the target format cannot represent. Where a write
   loses data, say so in the adapter's documentation and pin it with a test.
+- **Two devices are one journey.** Where sources overlap in time — a phone and
+  a watch, or two `data source` values in one Takeout day file — they are
+  reconciled or one is chosen. Concatenating them reports roughly twice the
+  distance along a zigzag, and it looks like a real track.
+- **A joined archive reports its shortfall.** `takeout` can find fewer traces
+  than there are logs claiming one. Say so on stderr; a quietly short result is
+  indistinguishable from a complete one.
 
 ## Testing
 

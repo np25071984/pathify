@@ -34,4 +34,23 @@ pub enum Error {
 
     #[error("invalid coordinate: {0}")]
     InvalidCoordinate(String),
+
+    /// A Takeout archive could not be opened or an entry could not be read.
+    ///
+    /// The cause is kept as a source rather than flattened into a string so
+    /// that an underlying [`std::io::Error`] stays visible in the chain — the
+    /// CLI reads that to tell an unreadable file (exit 2) apart from a
+    /// corrupt one (exit 1).
+    #[error("failed to read {path}")]
+    Archive {
+        path: String,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
+    /// A Takeout archive was readable but could not be used as asked. The
+    /// message is composed in core because what is worth saying depends on
+    /// what the archive turned out to contain, and core never prints.
+    #[error("{message}")]
+    Takeout { message: String },
 }

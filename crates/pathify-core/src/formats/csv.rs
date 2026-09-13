@@ -153,15 +153,24 @@ struct ColumnIndex {
     time: Option<usize>,
 }
 
+/// The canonical column a header names, or `None` for one to ignore.
+///
+/// `header` must already be normalized the way [`column_index`] does it:
+/// trimmed, lowercased, with spaces and hyphens turned into underscores.
+/// Shared with the Takeout reader, which recognizes the same coordinate
+/// columns but has one more of its own to pick out.
+pub(crate) fn canonical_column(header: &str) -> Option<&'static str> {
+    ALIASES
+        .iter()
+        .find(|(alias, _)| *alias == header)
+        .map(|(_, canonical)| *canonical)
+}
+
 fn column_index(headers: &csv::StringRecord) -> Result<ColumnIndex> {
     let mut found: HashMap<&str, usize> = HashMap::new();
     for (i, header) in headers.iter().enumerate() {
         let normalized = header.trim().to_ascii_lowercase().replace([' ', '-'], "_");
-        let canonical = ALIASES
-            .iter()
-            .find(|(alias, _)| *alias == normalized)
-            .map(|(_, canonical)| *canonical);
-        if let Some(canonical) = canonical {
+        if let Some(canonical) = canonical_column(&normalized) {
             // First matching column wins, so a file with both `lat` and
             // `latitude` does not flip-flop between them.
             found.entry(canonical).or_insert(i);

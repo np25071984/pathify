@@ -45,7 +45,7 @@ with a comment explaining why it cannot reach the network.
 | `pathify-core` | Trace model, format adapters, spatial math. Must not depend on `clap`, `ratatui`, or anything terminal-related. |
 | `pathify-cli` | Argument parsing, stdin/stdout plumbing, exit codes. Thin. |
 | `pathify-render` | Web Mercator projection and PNG compositing for `render`. Depends on core and `png` only; only the `render` command depends on it. |
-| `pathify-tui` | The interactive terminal map. Only the `view` command depends on it. |
+| `pathify-tui` | The interactive terminal map, and the multi-select menu. Only `view` and `takeout` depend on it. |
 
 Logic that could be unit-tested belongs in `pathify-core`. Never print or exit
 from core — return an error instead. Each `pathify-cli` subcommand lives in
@@ -74,6 +74,13 @@ the track off the roads it followed.
   test.
 - **Redaction splits, never joins.** Closing the gap draws a straight line
   through the hidden area and leaves a chord pointing at it.
+- **Two devices are one journey.** Overlapping sources — a phone and a watch, or
+  two `data source` values in one Takeout day file — are reconciled or one is
+  picked. Concatenating them doubles the distance along a plausible-looking
+  zigzag.
+- **A Takeout day file is a day, not an activity.** Points have to be sliced to
+  an exercise log's window, and the log's wall clock carries no UTC offset, so
+  the offset is measured rather than assumed.
 
 ## CLI conventions
 
@@ -90,7 +97,12 @@ the track off the roads it followed.
   refused as ambiguous rather than guessed at.
 - `info`, `convert`, `merge`, `clean`, and `view` are stable as of 1.x: flags,
   output formats, and exit codes do not break without a major bump. `render`
-  flags may still settle.
+  and `takeout` flags may still settle.
+- Reading a Takeout archive reads only the entries it needs. An export carries
+  sleep, heart rate and menstrual health beside the locations; nothing outside
+  the exercise logs and the GPS day files is opened, and the archive is never
+  modified. `exercise-*.json` has a `tcxLink` pointing at `fitbit.com` — it is
+  ignored, and must stay ignored.
 
 ## Testing expectations
 

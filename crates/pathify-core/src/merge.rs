@@ -308,7 +308,7 @@ fn best_match(
 /// Reconciled output cannot keep any single input's segmentation, because two
 /// devices disagree about where the pauses were. Time gaps are the one signal
 /// both recordings share.
-fn split_on_gaps(points: Vec<Point>, gap: Duration) -> Vec<Segment> {
+pub(crate) fn split_on_gaps(points: Vec<Point>, gap: Duration) -> Vec<Segment> {
     let mut segments: Vec<Segment> = Vec::new();
     let mut current: Vec<Point> = Vec::new();
     let mut previous: Option<chrono::DateTime<chrono::Utc>> = None;
