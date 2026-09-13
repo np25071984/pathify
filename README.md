@@ -5,10 +5,10 @@ convert, view, and render GPX, TCX, GeoJSON, and CSV traces, and pull them out
 of a Google Takeout archive, without a desktop GIS application and without
 uploading anything anywhere.
 
-> **Status: 1.3.** `info`, `convert`, `merge`, `clean`, and `view` are stable
+> **Status: 1.4.** `info`, `convert`, `merge`, `clean`, and `view` are stable
 > across GPX, TCX, GeoJSON, and CSV — flags, output formats, and exit codes
-> won't break without a major version bump. `render` is new in 1.3 and
-> `takeout` newer still, so both sets of flags may settle further. KML and FIT
+> won't break without a major version bump. `takeout` is new in 1.4 and
+> `render` arrived in 1.3, so both sets of flags may settle further. KML and FIT
 > adapters are still planned, as are Location History / Timeline exports for
 > `takeout`, which today reads the Google Health / Fitbit ones — see
 > [Roadmap](#roadmap).
