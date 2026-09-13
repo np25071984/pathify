@@ -4,7 +4,7 @@ All notable changes to Pathify are documented here. This project follows
 [Semantic Versioning](https://semver.org/): once released, a breaking change
 to CLI flags, output formats, or exit codes requires a major version bump.
 
-## Unreleased
+## 1.4.0
 
 ### Added
 
@@ -60,6 +60,11 @@ to CLI flags, output formats, or exit codes requires a major version bump.
   copied: the Takeout reader segments on the same rule `merge` does, and
   recognizes the same coordinate columns the CSV adapter does, with one of its
   own (`data source`) on top.
+- `AGENTS.md` now states the rules an agent working in this repository has to
+  know before it writes anything — the no-network rule, the crate boundaries,
+  and the invariants that produce plausible wrong numbers when broken — and the
+  release process itself is written down as a skill rather than recalled a step
+  at a time.
 
 ## 1.3.0
 
