@@ -67,6 +67,27 @@ pub enum Command {
     /// whole trace, ? for help, and q to quit.
     View(ViewArgs),
 
+    /// Pull GPS traces out of a Google Takeout archive.
+    ///
+    /// Make the export at takeout.google.com: deselect everything, tick
+    /// Google Health, and pass the Zip here without unpacking it. Repeat the
+    /// argument for a multi-part export. The README has the full steps.
+    ///
+    /// The unit of selection is the activity type — `Walk`, `Outdoor Bike` —
+    /// not the file, because an archive holds hundreds of recordings spread
+    /// across per-day files that do not correspond to activities at all.
+    ///
+    /// Nothing is unzipped: only the exercise logs and the GPS day files are
+    /// ever read, and only for the days the chosen activities fall on. A
+    /// Takeout export carries sleep, heart rate and other health data
+    /// alongside the locations; none of it is read, none of it is copied
+    /// anywhere, and the archive itself is never modified.
+    ///
+    /// The first and last points of these tracks are usually a home address.
+    /// `pathify clean --trim-ends` and `--redact-around` are the way to deal
+    /// with that before sharing anything.
+    Takeout(TakeoutArgs),
+
     /// Draw a trace onto a map image you already have, as a PNG.
     ///
     /// Pathify never downloads the map: it has no network code and is not
@@ -267,6 +288,102 @@ pub struct CleanArgs {
     /// Report what was removed, on stderr.
     #[arg(short, long)]
     pub verbose: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct TakeoutArgs {
+    /// Takeout archive(s). Repeat for a multi-part export, or name the
+    /// directory they were unzipped into.
+    #[arg(required = true, value_name = "ARCHIVE", num_args = 1..)]
+    pub archives: Vec<PathBuf>,
+
+    /// Filter by activity type (comma-separated, e.g. "walk,outdoor bike").
+    /// Case- and space-insensitive. Omit to choose from a menu.
+    // `r#type`, not `type_filter`: the field name is what clap derives the
+    // flag from, and `--type-filter` would match none of the documented
+    // examples. There is no short form, because `-t` cannot also belong to
+    // `--to`, and every other subcommand keeps `--to` long-only.
+    #[arg(long, value_name = "TYPES", value_delimiter = ',')]
+    pub r#type: Option<Vec<String>>,
+
+    /// List the activity types in the archive and exit.
+    #[arg(long, conflicts_with = "type")]
+    pub list: bool,
+
+    /// Emit `--list` as JSON instead of a table.
+    ///
+    /// Only `--list` has anything to say in JSON: everything else this
+    /// command produces is a trace, and a trace has its own formats.
+    #[arg(long, requires = "list")]
+    pub json: bool,
+
+    /// Keep only this recording device where several logged the same journey.
+    ///
+    /// Most days carry two — a phone and a watch — recording the same journey
+    /// a few meters apart. Concatenating them would report twice the distance,
+    /// so one is kept: the one that saw the most of the activity, unless this
+    /// names another.
+    #[arg(long, value_name = "NAME")]
+    pub source: Option<String>,
+
+    /// Gap that starts a new segment, e.g. `120s` or `5min`.
+    #[arg(
+        long,
+        value_name = "DURATION",
+        value_parser = parse_duration,
+        default_value = DEFAULT_SEGMENT_GAP
+    )]
+    pub segment_gap: f64,
+
+    /// Output format. Defaults to GPX, since a Zip implies no format of its own.
+    #[arg(long, value_name = "FORMAT", value_parser = parse_format)]
+    pub to: Option<Format>,
+
+    /// Write to this file instead of stdout.
+    ///
+    /// With --per-activity this names a directory instead, and is required.
+    #[arg(short, long, value_name = "FILE")]
+    pub output: Option<PathBuf>,
+
+    /// Write one file per activity into the --output directory.
+    ///
+    /// The default welds every match into one trace, which is what you want
+    /// to look at. A program importing each outing as its own record wants
+    /// one file each; this writes them, named after the activity's own start
+    /// time and type, into a directory created if it does not exist.
+    // An explicit flag rather than "-o names a directory": what that meant
+    // would depend on whether the path happened to exist already, so the same
+    // command would combine or split depending on the state of the disk.
+    #[arg(long, requires = "output", conflicts_with = "list")]
+    pub per_activity: bool,
+
+    /// Report what was found and skipped, on stderr.
+    #[arg(short, long)]
+    pub verbose: bool,
+}
+
+impl TakeoutArgs {
+    /// Resolve the output format.
+    ///
+    /// A deliberate departure from [`ConvertArgs::target_format`], which
+    /// errors rather than guessing: there an input format exists to inherit,
+    /// and here the input is a Zip, which implies nothing. So the fallback is
+    /// GPX. `--to` still beats an `--output` extension, as it does everywhere
+    /// else in this CLI — a flag the user typed should not lose to one they
+    /// only implied.
+    /// With --per-activity the output path is a directory, and a directory
+    /// name implies no more about a format than the Zip does, so only `--to`
+    /// and the GPX fallback are left.
+    pub fn target_format(&self) -> Format {
+        self.to
+            .or_else(|| {
+                self.output
+                    .as_deref()
+                    .filter(|_| !self.per_activity)
+                    .and_then(Format::from_path)
+            })
+            .unwrap_or(Format::Gpx)
+    }
 }
 
 /// A `lat,lon,radius` triple from the command line.
@@ -497,6 +614,13 @@ mod tests {
         }
     }
 
+    fn takeout_args(argv: &[&str]) -> TakeoutArgs {
+        match Cli::try_parse_from(argv).unwrap().command {
+            Command::Takeout(args) => args,
+            other => panic!("expected `takeout`, parsed {other:?}"),
+        }
+    }
+
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
@@ -524,6 +648,10 @@ mod tests {
         );
         assert_eq!(
             merge_args(&["pathify", "merge", "a.gpx", "b.gpx"]).segment_gap,
+            120.0
+        );
+        assert_eq!(
+            takeout_args(&["pathify", "takeout", "t.zip"]).segment_gap,
             120.0
         );
     }
@@ -562,6 +690,9 @@ mod tests {
         assert_eq!(merge.dedup_window, Some(120.0));
         assert!((merge.dedup_radius.unwrap() - 15.24).abs() < 1e-9);
         assert_eq!(merge.segment_gap, 3600.0);
+
+        let takeout = takeout_args(&["pathify", "takeout", "t.zip", "--segment-gap", "5min"]);
+        assert_eq!(takeout.segment_gap, 300.0);
     }
 
     /// A fence radius is a distance like any other, so it takes a unit too —
@@ -709,6 +840,124 @@ mod tests {
             "r.geojson",
         ]);
         assert_eq!(args.target_format().unwrap(), Format::Csv);
+    }
+
+    /// A Zip has no format to inherit, so `takeout` guesses where `convert`
+    /// refuses to — but only after both of the ways the user could have said.
+    #[test]
+    fn takeout_falls_back_to_gpx_only_when_nothing_says_otherwise() {
+        assert_eq!(
+            takeout_args(&["pathify", "takeout", "t.zip"]).target_format(),
+            Format::Gpx
+        );
+        assert_eq!(
+            takeout_args(&["pathify", "takeout", "t.zip", "-o", "out/walks.geojson"])
+                .target_format(),
+            Format::GeoJson
+        );
+        assert_eq!(
+            takeout_args(&[
+                "pathify",
+                "takeout",
+                "t.zip",
+                "--to",
+                "csv",
+                "-o",
+                "walks.gpx"
+            ])
+            .target_format(),
+            Format::Csv
+        );
+    }
+
+    /// `--per-activity` writes a directory of files, so the output path is a
+    /// directory name, and a directory name implies no format the way
+    /// `walks.csv` does.
+    #[test]
+    fn a_per_activity_output_directory_does_not_choose_the_format() {
+        let args = takeout_args(&[
+            "pathify",
+            "takeout",
+            "t.zip",
+            "--per-activity",
+            "-o",
+            "walks.csv",
+        ]);
+        assert!(args.per_activity);
+        assert_eq!(args.target_format(), Format::Gpx);
+
+        let args = takeout_args(&[
+            "pathify",
+            "takeout",
+            "t.zip",
+            "--per-activity",
+            "--to",
+            "csv",
+            "-o",
+            "walks",
+        ]);
+        assert_eq!(args.target_format(), Format::Csv);
+    }
+
+    /// The two are enforced by clap rather than checked at the point of use:
+    /// there is nowhere for a file per activity to go without a directory,
+    /// and nothing to split up when `--list` is only printing a table.
+    #[test]
+    fn per_activity_needs_an_output_directory_and_is_not_a_listing() {
+        assert!(Cli::try_parse_from(["pathify", "takeout", "t.zip", "--per-activity"]).is_err());
+        assert!(
+            Cli::try_parse_from([
+                "pathify",
+                "takeout",
+                "t.zip",
+                "--per-activity",
+                "--list",
+                "-o",
+                "walks"
+            ])
+            .is_err()
+        );
+    }
+
+    /// `--json` is `--list`'s output format, not the command's: everything
+    /// else `takeout` produces is a trace, which has `--to` for the purpose.
+    #[test]
+    fn takeout_json_belongs_to_the_listing() {
+        let args = takeout_args(&["pathify", "takeout", "t.zip", "--list", "--json"]);
+        assert!(args.list && args.json);
+        assert!(Cli::try_parse_from(["pathify", "takeout", "t.zip", "--json"]).is_err());
+        assert!(
+            Cli::try_parse_from([
+                "pathify", "takeout", "t.zip", "--list", "--json", "--type", "walk"
+            ])
+            .is_err()
+        );
+    }
+
+    /// The type filter is comma-separated and space-tolerant, and `--list`
+    /// cannot be combined with it: one prints a table, the other emits a
+    /// trace.
+    #[test]
+    fn takeout_takes_a_comma_separated_type_filter() {
+        let args = takeout_args(&["pathify", "takeout", "t.zip", "--type", "walk,outdoor bike"]);
+        assert_eq!(
+            args.r#type.as_deref(),
+            Some(["walk".to_string(), "outdoor bike".to_string()].as_slice())
+        );
+        assert!(!args.list);
+        assert!(
+            Cli::try_parse_from(["pathify", "takeout", "t.zip", "--list", "--type", "walk"])
+                .is_err()
+        );
+    }
+
+    /// A multi-part export is several files, and they have to be readable as
+    /// one: the exercise logs and the GPS days can land in different parts.
+    #[test]
+    fn takeout_accepts_several_archives_and_needs_at_least_one() {
+        let args = takeout_args(&["pathify", "takeout", "a-001.zip", "a-002.zip"]);
+        assert_eq!(args.archives.len(), 2);
+        assert!(Cli::try_parse_from(["pathify", "takeout"]).is_err());
     }
 
     #[test]

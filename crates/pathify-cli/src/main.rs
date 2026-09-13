@@ -53,6 +53,7 @@ fn run(cli: &Cli, out: &mut dyn Write) -> anyhow::Result<()> {
         Command::Merge(args) => commands::merge::run(args, out),
         Command::Clean(args) => commands::clean::run(args, out),
         Command::View(args) => commands::view::run(args, out),
+        Command::Takeout(args) => commands::takeout::run(args, out),
         Command::Render(args) => commands::render::run(args, out),
     }
 }

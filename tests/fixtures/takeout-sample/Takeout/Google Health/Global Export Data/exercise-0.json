@@ -1,0 +1,50 @@
+[{
+  "logId" : 1001,
+  "activityName" : "Walk",
+  "activityTypeId" : 90013,
+  "startTime" : "07/11/26 11:30:00",
+  "originalStartTime" : "07/11/26 11:30:00",
+  "duration" : 620000,
+  "activeDuration" : 600000,
+  "steps" : 1410,
+  "calories" : 111,
+  "logType" : "auto_detected",
+  "hasGps" : true,
+  "tcxLink" : "https://www.fitbit.com/activities/exercise/1001?export=tcx"
+},{
+  "logId" : 1002,
+  "activityName" : "Walk",
+  "activityTypeId" : 90013,
+  "startTime" : "07/12/26 08:00:00",
+  "duration" : 900000,
+  "activeDuration" : 900000,
+  "hasGps" : false
+},{
+  "logId" : 1003,
+  "activityName" : "Outdoor Bike",
+  "activityTypeId" : 90001,
+  "startTime" : "07/11/26 23:55:00",
+  "duration" : 600000,
+  "activeDuration" : 600000,
+  "distance" : 1.9,
+  "distanceUnit" : "Mile",
+  "logType" : "tracker",
+  "hasGps" : true,
+  "tcxLink" : "https://www.fitbit.com/activities/exercise/1003?export=tcx"
+},{
+  "logId" : 1004,
+  "activityName" : "Swim",
+  "activityTypeId" : 90024,
+  "startTime" : "07/20/26 09:00:00",
+  "duration" : 1800000,
+  "activeDuration" : 1800000,
+  "hasGps" : true
+},{
+  "logId" : 1005,
+  "activityName" : "Workout",
+  "activityTypeId" : 3000,
+  "startTime" : "07/13/26 18:00:00",
+  "duration" : 2400000,
+  "activeDuration" : 2400000,
+  "hasGps" : false
+}]

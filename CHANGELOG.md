@@ -4,6 +4,63 @@ All notable changes to Pathify are documented here. This project follows
 [Semantic Versioning](https://semver.org/): once released, a breaking change
 to CLI flags, output formats, or exit codes requires a major version bump.
 
+## Unreleased
+
+### Added
+
+- `takeout`, which pulls GPS traces out of a Google Takeout export without
+  unzipping two gigabytes by hand and without uploading anything. It reads the
+  Google Health / Fitbit exports — the ones with a `Physical
+  Activity_GoogleData` folder — by joining the two file families that are no
+  use apart: the per-day GPS CSVs, and the exercise logs that say which stretch
+  of a day was a bike ride. The Zip is read in place, and only those two
+  families are ever opened, which matters more here than anywhere else in
+  Pathify: an export carries sleep, heart rate and menstrual health beside the
+  locations, and the logs' `tcxLink` points at `fitbit.com`, which nothing in
+  Pathify can follow.
+  - The unit of selection is the activity type, not the file, because a day
+    file is a day: it runs midnight to midnight, holds unrelated outings, and
+    interleaves every device that was recording. `--type "walk,outdoor bike"`
+    names types on the command line, `--list` prints the ones an archive holds
+    with how many of each carry coordinates, and with a terminal at both ends
+    you get a menu instead.
+  - Where a phone and a watch both recorded one journey, one is kept — the one
+    that saw the most of it, unless `--source` names another. Concatenating the
+    two would report roughly twice the distance along a plausible-looking
+    zigzag.
+  - The exercise logs' start times carry no UTC offset, so the offset is
+    measured rather than assumed: the shift that lands the most activity
+    windows over recorded points wins. Assuming UTC would silently emit empty
+    tracks for everyone it is not true for, and `--verbose` says so when no
+    shift lands on anything.
+- `takeout --list --json` emits that listing as JSON — each activity type with
+  its log count and how many carry GPS, plus the totals — shaped like
+  `info --json`, for a program deciding what to ask for rather than a person
+  reading a table.
+- `takeout --per-activity` writes one file per activity into the `--output`
+  directory instead of welding every match into a single trace, for importers
+  that take one activity per record and would otherwise have to work out where
+  one outing ends and the next begins. Names come from the activity's own UTC
+  start and its type — `20260711T113000Z-outdoor-bike.gpx` — so a listing is
+  chronological, two outings of one type on one day are two files, and running
+  the same command twice rewrites its own output rather than accumulating
+  copies. `-o` without the flag still writes the one combined file it always
+  did.
+
+### Internal
+
+- New `pathify_core::takeout` module. `Archive` reads a Zip and an unpacked
+  directory through one interface, so a multi-part export and a folder someone
+  already unzipped take the same path; `Backend` names what an export turned
+  out to hold, so a Location History archive is reported rather than misread as
+  an empty one.
+- `pathify-tui` gained the multi-select menu `takeout` asks with, beside the
+  map, so `ratatui` still never reaches the pipeline commands.
+- `split_on_gaps` and the CSV column-alias table are now shared rather than
+  copied: the Takeout reader segments on the same rule `merge` does, and
+  recognizes the same coordinate columns the CSV adapter does, with one of its
+  own (`data source`) on top.
+
 ## 1.3.0
 
 ### Added

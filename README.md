@@ -1,13 +1,16 @@
 # Pathify
 
 A local-first command-line toolkit for GPS trace data — inspect, clean, merge,
-convert, view, and render GPX, TCX, GeoJSON, and CSV traces without a desktop
-GIS application and without uploading anything anywhere.
+convert, view, and render GPX, TCX, GeoJSON, and CSV traces, and pull them out
+of a Google Takeout archive, without a desktop GIS application and without
+uploading anything anywhere.
 
 > **Status: 1.3.** `info`, `convert`, `merge`, `clean`, and `view` are stable
 > across GPX, TCX, GeoJSON, and CSV — flags, output formats, and exit codes
-> won't break without a major version bump. `render` is new in 1.3 and its
-> flags may still settle. KML and FIT adapters are still planned — see
+> won't break without a major version bump. `render` is new in 1.3 and
+> `takeout` newer still, so both sets of flags may settle further. KML and FIT
+> adapters are still planned, as are Location History / Timeline exports for
+> `takeout`, which today reads the Google Health / Fitbit ones — see
 > [Roadmap](#roadmap).
 
 ## Format support
@@ -333,6 +336,196 @@ yourself. Pathify still makes no request either way.
 Segments are drawn separately here too, so a pause or a dropout shows as a break
 in the line rather than a stroke across ground nobody covered.
 
+### `pathify takeout`
+
+Pull GPS traces out of a Google Takeout export, locally, without unzipping two
+gigabytes by hand and without uploading anything. If you do not have an export
+yet, [start here](#getting-an-archive).
+
+```sh
+pathify takeout takeout-*.zip --list                      # what is in there
+pathify takeout takeout.zip --type walk -o walks.gpx      # extract
+pathify takeout takeout.zip                               # pick from a menu
+```
+
+| Flag | Effect |
+| --- | --- |
+| `--list` | Print the activity types and exit |
+| `--json` | Print `--list` as JSON instead of a table |
+| `--type <TYPES>` | Comma-separated types to extract, e.g. `"walk,outdoor bike"` |
+| `--source <NAME>` | Keep this recording device where several logged the same journey |
+| `--segment-gap <DURATION>` | Gap that starts a new segment (default `120s`) |
+| `--to <FORMAT>` | Output format (default `gpx`, since a Zip implies none) |
+| `-o, --output <FILE>` | Write to a file instead of stdout |
+| `--per-activity` | Write one file per activity into the `--output` directory |
+| `-v, --verbose` | Report what was found and skipped, on stderr |
+
+Pass several archives at once for a [multi-part export](#getting-an-archive),
+or name the directory you unzipped them into. Either works.
+
+The unit of selection is the **activity type**, not the file, because an archive
+holds hundreds of recordings spread across per-day files that do not correspond
+to activities at all:
+
+```console
+$ pathify takeout takeout-20260909T182813Z-1-001.zip --list
+activity type   logs  with GPS
+Walk             144       117
+Bike               1         1
+Workout           29         0
+Swim              12         0
+Outdoor Bike      11         0
+Rowing machine     6         0
+
+203 logs, 118 with GPS, 79 days of recording
+```
+
+The `logs` column is every recording of that type; `with GPS` is how many of
+them carry coordinates, which is how many tracks you get. The two differ
+because a tracker logs plenty of activity it has no fix for — a pool swim, a
+rowing machine, a walk the watch caught after the fact.
+
+With no `--type` and a terminal at both ends, you get a menu instead. Types
+with no GPS behind them are shown but cannot be ticked — a swim with no
+coordinates is not something anyone can hand you as a track:
+
+```text
+5 activity logs, 3 with GPS, across 2 days of recording.
+
+┌────────────────────────────────────────────────────────────────────────┐
+│> [x] Walk          1 of 2 with GPS                                     │
+│  [ ] Outdoor Bike  1 of 1 with GPS                                     │
+│  [ ] Swim          1 of 1 with GPS                                     │
+│  [ ] Workout       0 of 1 with GPS                                     │
+└────────────────────────────────────────────────────────────────────────┘
+↑/↓ move · space toggle · a all · enter confirm · q cancel
+```
+
+Piping needs `--type`, because the menu would paint over the screen and corrupt
+the pipe:
+
+```sh
+pathify takeout takeout.zip --type walk | pathify view
+pathify takeout takeout.zip --type "walk,outdoor bike" | pathify clean -o sports.gpx
+pathify takeout takeout.zip --type walk | pathify render --fog --basemap map.png -o fog.png
+```
+
+#### Driving it from another program
+
+Two flags exist for callers that are not a person at a terminal. `--list
+--json` is the table above with the formatting taken off:
+
+```console
+$ pathify takeout takeout.zip --list --json
+{
+  "types": [
+    { "name": "Walk", "logs": 144, "with_gps": 117 },
+    { "name": "Bike", "logs": 1, "with_gps": 1 },
+    { "name": "Workout", "logs": 29, "with_gps": 0 }
+  ],
+  "total_logs": 203,
+  "total_with_gps": 118,
+  "days_of_recording": 79
+}
+```
+
+`--per-activity` writes one file per activity into a directory instead of
+welding every match into one trace, which is what an importer that takes one
+activity per record wants:
+
+```console
+$ pathify takeout takeout.zip --type walk --per-activity -o walks/
+$ ls walks/
+20260711T113000Z-walk.gpx  20260713T081500Z-walk.gpx  20260714T173000Z-walk.gpx
+```
+
+The directory is created if it is not there, and `--to` chooses the format of
+every file in it. Names are the activity's own start in UTC and its type, so
+they sort chronologically, two walks on one day are two files, and running the
+same command twice rewrites the same files rather than accumulating copies.
+(Two logs of one type that start in the same second — a phone and a watch that
+each filed the same walk — take their Fitbit log ids as well.)
+
+Without `--per-activity`, `-o` keeps naming a single file holding every
+matched activity, as it always has.
+
+#### Getting an archive
+
+Exports are made at [takeout.google.com](https://takeout.google.com). The page
+gets rearranged from time to time, but the shape of it does not:
+
+1. **Deselect all**, then tick **Google Health** — the product carrying Fitbit's
+   data, and the one `takeout` reads. Older exports list it as **Fitbit**.
+   Ticking everything instead produces a far larger archive carrying far more
+   about you than a GPS tool has any use for. (Ticking **Location History
+   (Timeline)** as well does nothing for `takeout` yet — see the end of this
+   section.)
+2. On the next step choose **Send download link via email**, **Export once**,
+   and **.zip**.
+3. Set the maximum archive size. Anything smaller than the total splits the
+   export into `…-001.zip`, `…-002.zip` and so on. Pass all of them at once —
+   the exercise logs and the GPS days can land in different parts, and neither
+   is any use alone.
+4. **Create export**, and wait. Minutes for one product, longer for a big
+   account. An email arrives with a link, which expires after a few days and
+   allows only a handful of downloads, so fetch it when it turns up.
+5. Leave the Zip zipped. `takeout` reads it in place, and unzipping two
+   gigabytes gains you nothing — though if you already have, pointing it at the
+   unpacked directory works just as well.
+
+Then run `--list` against it before building anything on top of it. Ticking
+the wrong product is the common mistake, and the fix is a new export rather
+than a different command, so the error names what the archive turned out to
+hold:
+
+```console
+$ pathify takeout takeout-20260909T182813Z-1-001.zip --list
+pathify: no location data in takeout-20260909T182813Z-1-001.zip.
+`takeout` reads Google Health / Fitbit exports. This archive holds: Takeout/YouTube and YouTube Music.
+Re-export from takeout.google.com with Google Health (or Location History) selected.
+```
+
+None of this is automated, and it will not be: fetching an export means talking
+to Google, and Pathify has no network code.
+
+#### What it actually does
+
+An export keeps the coordinates and the activities in different places, and
+neither is any use alone. `Physical Activity_GoogleData/gps_location_*.csv` has
+the fixes, one file per calendar day at roughly 1 Hz.
+`Global Export Data/exercise-*.json` has the logs — the records saying that a
+particular seventy minutes of one of those days was a bike ride. So `takeout`
+joins them, and three things about that are worth knowing:
+
+- **A day file is a day, not an activity.** One file can hold a morning errand,
+  a commute and an evening ride. Points are sliced to the log's window, and a
+  window that runs past midnight UTC is stitched from both day files.
+- **Most days carry two devices.** A phone and a watch record the same journey a
+  few meters apart, interleaved in the same file. Concatenating them gives a
+  zigzag with roughly twice the real distance, so one is kept: the one that saw
+  most of the activity, unless `--source` names the other.
+- **The logs' clock carries no offset.** Google writes `07/11/26 14:55:42` with
+  no timezone at all, and it has not always been UTC. Rather than assume,
+  `takeout` measures it — the offset that lands the activity windows on
+  actually-recorded points wins — and `--verbose` reports what it settled on.
+
+`--verbose` also reports the shortfall, which is real: an archive can have more
+logs claiming GPS than it has day files to back them.
+
+Nothing is unzipped, and only the entries above are ever read — a Takeout export
+carries sleep, heart rate, glucose and menstrual health alongside the locations,
+and none of it is opened, copied, or emitted. The archive itself is never
+modified. The exercise logs carry a `tcxLink` pointing at `fitbit.com`; Pathify
+ignores it, because Pathify has no network code.
+
+One thing worth doing before you share any of this: the first and last points of
+nearly every one of these tracks are a home address. `pathify clean --trim-ends
+300m` removes them without your having to name the place, and
+[`--redact-around`](#pathify-clean) fences one you can name.
+
+Location History / Timeline exports are recognized and reported, but not read
+yet. `takeout` currently reads Google Health / Fitbit exports.
+
 ### `pathify render`
 
 ```sh
@@ -468,7 +661,7 @@ Four crates, so the spatial logic stays free of interface concerns:
 | `pathify-core` | Trace model, format adapters, spatial math. No CLI, TUI, or network dependencies. |
 | `pathify-cli` | Argument parsing, stdin/stdout plumbing, exit codes. Thin. |
 | `pathify-render` | Web Mercator projection and PNG compositing for `render`. Isolated so `png` never reaches the pipeline commands. |
-| `pathify-tui` | The interactive terminal map. Isolated so `ratatui` never reaches the pipeline commands. |
+| `pathify-tui` | The interactive terminal map, and the multi-select menu `takeout` asks with. Isolated so `ratatui` never reaches the pipeline commands. |
 
 Every adapter reads into and writes out of one `Trace` model
 (`Trace` → `Track` → `Segment` → `Point`), which is why `convert` is N readers
@@ -487,6 +680,8 @@ jump across one as climb.
 - [x] `clean` — drift filtering and location redaction
 - [x] `view` — interactive braille terminal map
 - [x] `render` — trace drawn onto a bitmap basemap, plain or fog-of-war
+- [x] `takeout` — GPS traces joined out of a Google Takeout archive
+- [ ] `takeout`: Location History / Timeline exports
 - [x] TCX adapter
 - [ ] KML adapter
 - [ ] FIT adapter
