@@ -291,6 +291,10 @@ pathify view ride.gpx
 cat ride.gpx | pathify view      # piping the trace in is fine
 ```
 
+| Flag | Effect |
+| --- | --- |
+| `--from <FORMAT>` | Override input format detection |
+
 | Key | Action |
 | --- | --- |
 | `h` `j` `k` `l` or arrows | Pan |
