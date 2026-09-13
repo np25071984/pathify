@@ -1,12 +1,8 @@
 # `takeout-sample`
 
-A synthetic Google Takeout export, laid out exactly like a real Google Health
-one but four kilobytes instead of two gigabytes. `crates/pathify-cli/tests/takeout.rs`
-reads it both as a directory and zipped into a temporary file, because
-`pathify takeout` accepts either.
+A synthetic Google Takeout export, laid out exactly like a real Google Health one but four kilobytes instead of two gigabytes. `crates/pathify-cli/tests/takeout.rs` reads it both as a directory and zipped into a temporary file, because `pathify takeout` accepts either.
 
-Every awkward thing in it is deliberate, and each reproduces something the real
-export does:
+Every awkward thing in it is deliberate, and each reproduces something the real export does:
 
 | In here | Why |
 | --- | --- |
